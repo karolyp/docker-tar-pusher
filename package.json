@@ -1,0 +1,27 @@
+{
+  "name": "docker-tar-pusher",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "tsc && node build/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^15.6.1",
+    "@types/tar": "^4.0.4",
+    "@typescript-eslint/eslint-plugin": "^4.25.0",
+    "@typescript-eslint/parser": "^4.25.0",
+    "eslint": "^7.27.0",
+    "prettier": "^2.3.0",
+    "typescript": "^4.3.2"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "tar": "^6.1.0"
+  }
+}
