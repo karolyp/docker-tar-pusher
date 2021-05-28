@@ -9,3 +9,5 @@ import { DockerTarPusher } from 'docker-tar-pusher';
 const dockerTarPusher = new DockerTarPusher({ registryUrl: '<registry url>', tarball: '<tarball>' });
 dockerTarPusher.pushToRegistry();
 ```
+
+Inspired by [dockerregistrypusher](https://github.com/Razikus/dockerregistrypusher)
