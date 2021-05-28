@@ -4,8 +4,7 @@ import { DockerTarPusherOptions, MetaData } from './types';
 import ManifestBuilder, { MANIFEST_MEDIA_TYPE } from './ManifestBuilder';
 import Utils from './Utils';
 
-const MAX_CHUNK_SIZE = 100 * 1024 * 1024;
-
+const CHUNK_SIZE = 10 * 1024 * 1024;
 export default class DockerTarPusher {
   private readonly utils: Utils;
   private readonly axios: AxiosInstance;
@@ -15,8 +14,8 @@ export default class DockerTarPusher {
     this.utils = new Utils();
     this.manifestBuilder = new ManifestBuilder();
     this.axios = axios.create({
-      maxBodyLength: MAX_CHUNK_SIZE,
-      maxContentLength: MAX_CHUNK_SIZE
+      maxBodyLength: CHUNK_SIZE,
+      maxContentLength: CHUNK_SIZE
     });
   }
 
@@ -72,11 +71,11 @@ export default class DockerTarPusher {
     let chunk;
     let headers;
 
-    for await (chunk of this.utils.readChunks(file, MAX_CHUNK_SIZE)) {
+    for await (chunk of this.utils.readChunks(file, CHUNK_SIZE)) {
       headers = this.utils.getUploadHeaders(offset, chunk.length);
       offset += chunk.length;
       sha256.update(chunk);
-      if (chunk.length === MAX_CHUNK_SIZE) {
+      if (chunk.length === CHUNK_SIZE) {
         const { headers: responseHeaders } = await this.axios.patch(followUploadUrl, chunk, { headers });
         followUploadUrl = responseHeaders['location'];
       }
