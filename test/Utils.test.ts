@@ -3,7 +3,6 @@ import fs from 'fs';
 import os from 'os';
 import Utils from '../src/Utils';
 import { rawManifest } from './fixtures/manifest';
-import { isExportDeclaration } from 'typescript';
 
 jest.mock('tar');
 jest.mock('fs');

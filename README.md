@@ -1,4 +1,5 @@
 # docker-tar-pusher
+[![build](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml/badge.svg)](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml)
 
 With this library you will be able to push tar files directly to Docker registry without the need of loading it to the Docker Engine, retagging and pushing.
 
