@@ -12,7 +12,11 @@ export default class Utils {
   }
 
   public extract(archive: string): void {
-    tar.extract({ file: archive, cwd: this.cwd, sync: true });
+    try {
+      tar.extract({ file: archive, cwd: this.cwd, sync: true });
+    } catch ({message}) {
+      throw new Error(`Cannot extract ${archive}. Message: ${message}`);
+    }
   }
 
   public cleanUp(): void {

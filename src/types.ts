@@ -26,6 +26,7 @@ export type RegistryManifest = {
 export type DockerTarPusherOptions = {
   registryUrl: string;
   tarball: string;
+  chunkSize?: number;
 };
 
 export type Headers = {
