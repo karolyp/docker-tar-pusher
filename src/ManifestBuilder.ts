@@ -1,6 +1,4 @@
-import { Config, Layer, RegistryManifest } from './types';
-
-export const MANIFEST_MEDIA_TYPE = 'application/vnd.docker.distribution.manifest.v2+json';
+import { Config, ContentTypes, Layer, RegistryManifest } from './types';
 
 export default class ManifestBuilder {
   private layers?: Layer[];
@@ -14,7 +12,7 @@ export default class ManifestBuilder {
       config: this.config,
       layers: this.layers,
       schemaVersion: 2,
-      mediaType: MANIFEST_MEDIA_TYPE
+      mediaType: ContentTypes.APPLICATION_MANIFEST
     };
   }
 
@@ -25,7 +23,7 @@ export default class ManifestBuilder {
     this.layers.push({
       digest,
       size,
-      mediaType: 'application/vnd.docker.image.rootfs.diff.tar'
+      mediaType: ContentTypes.APPLICATION_LAYER
     });
   }
 
@@ -33,7 +31,7 @@ export default class ManifestBuilder {
     this.config = {
       digest,
       size,
-      mediaType: 'application/vnd.docker.container.image.v1+json'
+      mediaType: ContentTypes.APPLICATION_CONFIG
     };
   }
 }

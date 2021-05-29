@@ -2,19 +2,23 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import tar from 'tar';
-import { Headers, Manifest } from './types';
+import { Headers, Manifest, RequestHeaders, ContentTypes } from './types';
 
 export default class Utils {
   private readonly cwd: string;
 
   constructor(prefix = 'dtp-') {
     this.cwd = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    process.on('SIGINT', () => {
+      this.cleanUp();
+      process.exit();
+    });
   }
 
   public extract(archive: string): void {
     try {
       tar.extract({ file: archive, cwd: this.cwd, sync: true });
-    } catch ({message}) {
+    } catch ({ message }) {
       throw new Error(`Cannot extract ${archive}. Message: ${message}`);
     }
   }
@@ -39,9 +43,9 @@ export default class Utils {
 
   public getUploadHeaders(start: number, length: number): Headers {
     return {
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': length,
-      'Content-Range': `${start}-${start + length}`
+      [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
+      [RequestHeaders.CONTENT_LENGTH]: length,
+      [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
     };
   }
 }

@@ -1,24 +1,27 @@
 import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
-import { DockerTarPusherOptions as DockerTarPusherConfig, MetaData } from './types';
-import ManifestBuilder, { MANIFEST_MEDIA_TYPE } from './ManifestBuilder';
+import { ContentTypes, DockerTarPusherOptions as DockerTarPusherConfig, MetaData, RequestHeaders } from './types';
+import ManifestBuilder from './ManifestBuilder';
 import Utils from './Utils';
-
-const DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024;
+import Logger from './Logger';
 
 export default class DockerTarPusher {
   private readonly utils: Utils;
   private readonly axios: AxiosInstance;
   private readonly manifestBuilder: ManifestBuilder;
   private readonly config: Required<DockerTarPusherConfig>;
+  private readonly logger: Logger;
 
   constructor(config: DockerTarPusherConfig) {
-    this.utils = new Utils();
-    this.manifestBuilder = new ManifestBuilder();
     this.config = {
-      chunkSize: DEFAULT_CHUNK_SIZE,
+      chunkSize: 10 * 1024 * 1024,
+      quiet: true,
       ...config
     };
+    this.logger = new Logger({ quiet: this.config.quiet });
+    this.utils = new Utils();
+    this.manifestBuilder = new ManifestBuilder();
+
     this.axios = axios.create({
       maxBodyLength: this.config.chunkSize,
       maxContentLength: this.config.chunkSize
@@ -32,16 +35,16 @@ export default class DockerTarPusher {
 
       for (const repoTag of manifest.RepoTags) {
         const [image, tag] = repoTag.split(':');
-        console.log(`Pushing ${image}:${tag}...`);
+        this.logger.log(`Pushing ${image}:${tag}...`);
         for await (const layer of manifest.Layers) {
-          console.log(`Pushing layer ${layer.split('/')[0]}...`);
+          this.logger.log(`Pushing layer ${layer.split('/')[0]}...`);
           await this.handleLayer(image, layer);
         }
 
-        console.log('Pushing config...');
+        this.logger.log('Pushing config...');
         await this.handleConfig(image, manifest.Config);
 
-        console.log('Pushing manifest...');
+        this.logger.log('Pushing manifest...');
         await this.pushManifest(image, tag);
       }
     } finally {
@@ -111,7 +114,7 @@ export default class DockerTarPusher {
 
   private async pushManifest(image: string, tag: string): Promise<void> {
     const headers = {
-      'Content-Type': MANIFEST_MEDIA_TYPE
+      [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST
     };
     const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
     await axios.put(url, this.manifestBuilder.buildManifest(), { headers });

@@ -27,6 +27,7 @@ export type DockerTarPusherOptions = {
   registryUrl: string;
   tarball: string;
   chunkSize?: number;
+  quiet?: boolean;
 };
 
 export type Headers = {
@@ -36,4 +37,21 @@ export type Headers = {
 export type MetaData = {
   digest: string;
   size: number;
+};
+
+export const RequestHeaders = {
+  CONTENT_TYPE: 'Content-Type',
+  CONTENT_LENGTH: 'Content-Length',
+  CONTENT_RANGE: 'Content-Range'
+};
+
+export const ContentTypes = {
+  APPLICATION_OCTET_STREAM: 'application/octet-stream',
+  APPLICATION_MANIFEST: 'application/vnd.docker.distribution.manifest.v2+json',
+  APPLICATION_LAYER: 'application/vnd.docker.image.rootfs.diff.tar',
+  APPLICATION_CONFIG: 'application/vnd.docker.container.image.v1+json'
+};
+
+export type LoggerConfig = {
+  quiet: boolean;
 };
