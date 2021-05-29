@@ -28,6 +28,11 @@ export type DockerTarPusherOptions = {
   tarball: string;
   chunkSize?: number;
   quiet?: boolean;
+  sslVerify?: boolean;
+  auth?: {
+    username: string;
+    password: string;
+  };
 };
 
 export type Headers = {
@@ -54,4 +59,16 @@ export const ContentTypes = {
 
 export type LoggerConfig = {
   quiet: boolean;
+};
+
+export type ApplicationConfiguration = {
+  registryUrl: string;
+  tarball: string;
+  chunkSize: number;
+  quiet: boolean;
+  sslVerify: boolean;
+  auth?: {
+    username: string;
+    password: string;
+  };
 };

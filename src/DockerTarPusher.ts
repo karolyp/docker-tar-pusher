@@ -1,31 +1,26 @@
 import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
-import { ContentTypes, DockerTarPusherOptions as DockerTarPusherConfig, MetaData, RequestHeaders } from './types';
+import { ContentTypes, DockerTarPusherOptions, MetaData, RequestHeaders, ApplicationConfiguration } from './types';
 import ManifestBuilder from './ManifestBuilder';
 import Utils from './Utils';
 import Logger from './Logger';
+import { getConfiguration } from './config';
+import { createInstance } from './axios';
 
 export default class DockerTarPusher {
   private readonly utils: Utils;
   private readonly axios: AxiosInstance;
   private readonly manifestBuilder: ManifestBuilder;
-  private readonly config: Required<DockerTarPusherConfig>;
+  private readonly config: ApplicationConfiguration;
   private readonly logger: Logger;
 
-  constructor(config: DockerTarPusherConfig) {
-    this.config = {
-      chunkSize: 10 * 1024 * 1024,
-      quiet: true,
-      ...config
-    };
+  constructor(options: DockerTarPusherOptions) {
+    this.config = getConfiguration(options);
     this.logger = new Logger({ quiet: this.config.quiet });
+    this.logger.log(`App starting with config: ${JSON.stringify(this.config)}`);
     this.utils = new Utils();
     this.manifestBuilder = new ManifestBuilder();
-
-    this.axios = axios.create({
-      maxBodyLength: this.config.chunkSize,
-      maxContentLength: this.config.chunkSize
-    });
+    this.axios = createInstance(this.config);
   }
 
   public async pushToRegistry(): Promise<void> {
@@ -55,9 +50,7 @@ export default class DockerTarPusher {
   private async startUpload(image: string): Promise<string> {
     const startUploadUrl = `${this.config.registryUrl}/v2/${image}/blobs/uploads/`;
     try {
-      return await (
-        await axios.post(startUploadUrl)
-      ).headers.location;
+      return (await axios.post(startUploadUrl)).headers.location;
     } catch ({ message }) {
       throw new Error(`Error during initiating upload. Message: ${message}`);
     }
@@ -117,6 +110,10 @@ export default class DockerTarPusher {
       [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST
     };
     const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
-    await axios.put(url, this.manifestBuilder.buildManifest(), { headers });
+    try {
+      await axios.put(url, this.manifestBuilder.buildManifest(), { headers });
+    } catch ({ message }) {
+      throw new Error(`Error during pushing manifest. Message: ${message}`);
+    }
   }
 }
