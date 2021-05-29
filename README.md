@@ -7,7 +7,7 @@ With this library you will be able to push tar files directly to Docker registry
 
 - registryUrl: address of the registry
 - tarball: absolute path to tar file
-- chunkSize (optional): size of chunks, defaults to 10 MB (10 \* 1024 \* 1024)
+- chunkSize (optional): size of chunks, defaults to 10 MiB (10 \* 1024 \* 1024)
 - quiet (optional): whether to log or not, defaults to true
 
 ## Example
