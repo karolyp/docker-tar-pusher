@@ -2,6 +2,10 @@
   "name": "docker-tar-pusher",
   "version": "1.0.6",
   "description": "A small tool that allows pushing tar files directly to a Docker registry.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/karolyp/docker-tar-pusher.git"
+  },
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
