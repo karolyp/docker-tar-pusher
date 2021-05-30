@@ -2,11 +2,14 @@
 
 [![build](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml/badge.svg)](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml)
 
-With this library you can push Docker image in tar format, directly to a Docker registry without the need of loading it to the Docker Engine, retagging and pushing.
+With this library you can push tar Docker images directly to a Docker registry without the need of loading them into the Docker Engine, retagging and pushing.
 
+The library uses [chunked upload](https://docs.docker.com/registry/spec/api/#pushing-an-image) to push the layers.
+
+Supports HTTP Basic auth.
 ## How to use
 
-First, you have create a configuration object which can contain the following properties:
+First, you have to create a configuration object which can hold the following properties:
 
 - registryUrl: address of the registry
 - tarball: absolute path to tar file

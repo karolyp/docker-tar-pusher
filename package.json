@@ -1,7 +1,7 @@
 {
   "name": "docker-tar-pusher",
   "version": "1.0.5",
-  "description": "",
+  "description": "A small tool that allows pushing tar files directly to a Docker registry.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -12,8 +12,13 @@
     "start": "tsc && node build/index.js",
     "test": "jest"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "docker",
+    "docker registry",
+    "docker image",
+    "docker tar"
+  ],
+  "author": "Károly Pákozdi <karoly.pakozdi.150@gmail.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^26.0.23",
