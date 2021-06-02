@@ -1,7 +1,9 @@
 import tar from 'tar';
 import fs from 'fs';
 import os from 'os';
-import Utils from '../src/Utils';
+import WorkDirUtils from '../src/WorkDirUtils';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import { rawManifest } from './fixtures/manifest';
 
 jest.mock('tar');
@@ -9,12 +11,14 @@ jest.mock('fs');
 jest.mock('os');
 
 describe('test utils', () => {
-  let utils: Utils;
+  let utils: WorkDirUtils;
 
   beforeEach(() => {
     (os.tmpdir as jest.Mock).mockReturnValue('/tmp');
     (fs.mkdtempSync as jest.Mock).mockReturnValue('/tmp/folder/pref-rand');
-    utils = new Utils('pref-');
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
+    utils = new WorkDirUtils();
+    utils.createTempDir('pref-');
   });
 
   afterEach(() => {
@@ -78,18 +82,6 @@ describe('test utils', () => {
       Config: 'a29f45ccde2ac0bde957b1277b1501f471960c8ca49f1588c6c885941640ae60.json',
       RepoTags: ['hello-world:latest'],
       Layers: ['64b31f3fb4704376464f3269e8c303930e10084d2df4ace379900150c71e38cf/layer.tar']
-    });
-  });
-
-  it('should return proper headers', () => {
-    // when
-    const headers = utils.getUploadHeaders(0, 100);
-
-    // then
-    expect(headers).toEqual({
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': 100,
-      'Content-Range': `0-100`
     });
   });
 });

@@ -1,14 +1,21 @@
 import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
-import { ContentTypes, DockerTarPusherOptions, MetaData, RequestHeaders, ApplicationConfiguration } from './types';
+import {
+  ContentTypes,
+  DockerTarPusherOptions,
+  MetaData,
+  RequestHeaders,
+  ApplicationConfiguration,
+  Headers
+} from './types';
 import ManifestBuilder from './ManifestBuilder';
-import Utils from './Utils';
+import WorkDirUtils from './WorkDirUtils';
 import Logger from './Logger';
 import { getConfiguration } from './config';
 import { createInstance } from './axios';
 
 export default class DockerTarPusher {
-  private readonly utils: Utils;
+  private readonly workDirUtils: WorkDirUtils;
   private readonly axios: AxiosInstance;
   private readonly manifestBuilder: ManifestBuilder;
   private readonly config: ApplicationConfiguration;
@@ -18,15 +25,16 @@ export default class DockerTarPusher {
     this.config = getConfiguration(options);
     this.logger = new Logger({ quiet: this.config.quiet });
     this.logger.log(`App starting with config: ${JSON.stringify(this.config)}`);
-    this.utils = new Utils();
+    this.workDirUtils = new WorkDirUtils();
     this.manifestBuilder = new ManifestBuilder();
     this.axios = createInstance(this.config);
   }
 
   public async pushToRegistry(): Promise<void> {
     try {
-      this.utils.extract(this.config.tarball);
-      const manifest = this.utils.readManifest();
+      this.workDirUtils.createTempDir();
+      this.workDirUtils.extract(this.config.tarball);
+      const manifest = this.workDirUtils.readManifest();
 
       for (const repoTag of manifest.RepoTags) {
         const [image, tag] = repoTag.split(':');
@@ -43,7 +51,7 @@ export default class DockerTarPusher {
         await this.pushManifest(image, tag);
       }
     } finally {
-      this.utils.cleanUp();
+      this.workDirUtils.cleanUp();
     }
   }
 
@@ -76,8 +84,8 @@ export default class DockerTarPusher {
     let headers;
 
     try {
-      for await (chunk of this.utils.readChunks(file, this.config.chunkSize)) {
-        headers = this.utils.getUploadHeaders(offset, chunk.length);
+      for await (chunk of this.workDirUtils.readChunks(file, this.config.chunkSize)) {
+        headers = this.getUploadHeaders(offset, chunk.length);
         offset += chunk.length;
         sha256.update(chunk);
         if (chunk.length === this.config.chunkSize) {
@@ -116,4 +124,10 @@ export default class DockerTarPusher {
       throw new Error(`Error during pushing manifest. Message: ${message}`);
     }
   }
+
+  private getUploadHeaders = (start: number, length: number): Headers => ({
+    [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
+    [RequestHeaders.CONTENT_LENGTH]: length,
+    [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
+  });
 }

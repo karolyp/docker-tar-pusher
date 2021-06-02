@@ -2,17 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import tar from 'tar';
-import { Headers, Manifest, RequestHeaders, ContentTypes } from './types';
+import { Manifest } from './types';
 
-export default class Utils {
-  private readonly cwd: string;
+export default class WorkDirUtils {
+  private cwd?: string;
 
-  constructor(prefix = 'dtp-') {
+  public createTempDir(prefix = 'dtp-'): void {
     this.cwd = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-    process.on('SIGINT', () => {
-      this.cleanUp();
-      process.exit();
-    });
   }
 
   public extract(archive: string): void {
@@ -24,28 +20,28 @@ export default class Utils {
   }
 
   public cleanUp(): void {
-    fs.rmSync(this.cwd, { recursive: true });
+    if (this.cwd && fs.existsSync(this.cwd)) {
+      fs.rmSync(this.cwd, { recursive: true });
+    }
   }
 
   public readManifest(): Manifest {
+    if (!this.cwd) {
+      throw new Error('Working directory is not set!');
+    }
     const rawManifest = fs.readFileSync(path.join(this.cwd, 'manifest.json')).toString();
     return JSON.parse(rawManifest)[0] as Manifest;
   }
 
-  public async *readChunks(file: string, chunkSize: number): AsyncIterableIterator<Buffer> {
+  public async* readChunks(file: string, chunkSize: number): AsyncIterableIterator<Buffer> {
+    if (!this.cwd) {
+      throw new Error('Working directory is not set!');
+    }
     const readStream = fs.createReadStream(path.join(this.cwd, file), {
       highWaterMark: chunkSize
     });
     for await (const chunk of readStream) {
       yield chunk;
     }
-  }
-
-  public getUploadHeaders(start: number, length: number): Headers {
-    return {
-      [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
-      [RequestHeaders.CONTENT_LENGTH]: length,
-      [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
-    };
   }
 }
