@@ -2,3 +2,4 @@ node_modules
 build
 tars
 coverage
+.idea
