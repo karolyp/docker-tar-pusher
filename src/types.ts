@@ -36,10 +36,10 @@ export type DockerTarPusherOptions = {
 };
 
 export type Headers = {
-  [key: string]: string | number;
+  [key: string]: string;
 };
 
-export type MetaData = {
+export type FileMetaData = {
   digest: string;
   size: number;
 };

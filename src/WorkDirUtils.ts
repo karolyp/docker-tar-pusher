@@ -21,7 +21,12 @@ export default class WorkDirUtils {
 
   public cleanUp(): void {
     if (this.cwd && fs.existsSync(this.cwd)) {
-      fs.rmSync(this.cwd, { recursive: true });
+      if (fs.rmSync) {
+        fs.rmSync(this.cwd, { recursive: true });
+      } else {
+        // supporting Node versions older than 14.14
+        fs.rmdirSync(this.cwd, { recursive: true });
+      }
     }
   }
 
@@ -43,5 +48,13 @@ export default class WorkDirUtils {
     for await (const chunk of readStream) {
       yield chunk;
     }
+  }
+
+  public getFileSize(file: string): number {
+    if (!this.cwd) {
+      throw new Error('Working directory is not set!');
+    }
+    const { size } = fs.statSync(path.join(this.cwd, file));
+    return size;
   }
 }

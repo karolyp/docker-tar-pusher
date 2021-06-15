@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import {
   ContentTypes,
   DockerTarPusherOptions,
-  MetaData,
+  FileMetaData,
   RequestHeaders,
   ApplicationConfiguration,
   Headers
@@ -76,19 +76,20 @@ export default class DockerTarPusher {
     this.addConfigDataToManifest(digest, size);
   }
 
-  private async pushFileInChunks(uploadUrl: string, file: string): Promise<MetaData> {
+  private async pushFileInChunks(uploadUrl: string, file: string): Promise<FileMetaData> {
     const sha256 = crypto.createHash('sha256');
-    let offset = 0;
+    let bytesRead = 0;
     let followUploadUrl = uploadUrl;
     let chunk;
     let headers;
+    const fileSize = this.workDirUtils.getFileSize(file);
 
     try {
       for await (chunk of this.workDirUtils.readChunks(file, this.config.chunkSize)) {
-        headers = this.getUploadHeaders(offset, chunk.length);
-        offset += chunk.length;
+        headers = this.getUploadHeaders(bytesRead, chunk.length);
+        bytesRead += chunk.length;
         sha256.update(chunk);
-        if (chunk.length === this.config.chunkSize) {
+        if (bytesRead < fileSize) {
           const { headers: responseHeaders } = await this.axios.patch(followUploadUrl, chunk, { headers });
           followUploadUrl = responseHeaders.location;
         }
@@ -98,7 +99,7 @@ export default class DockerTarPusher {
       await this.axios.put(`${followUploadUrl}&digest=${digest}`, chunk, { headers });
       return {
         digest,
-        size: offset
+        size: bytesRead
       };
     } catch ({ message }) {
       throw new Error(`Error during pushing file. Message: ${message}`);
@@ -127,7 +128,7 @@ export default class DockerTarPusher {
 
   private getUploadHeaders = (start: number, length: number): Headers => ({
     [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
-    [RequestHeaders.CONTENT_LENGTH]: length,
+    [RequestHeaders.CONTENT_LENGTH]: String(length),
     [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
   });
 }
