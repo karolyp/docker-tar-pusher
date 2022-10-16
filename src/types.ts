@@ -23,52 +23,48 @@ export type RegistryManifest = {
   layers: Layer[];
 };
 
-export type DockerTarPusherOptions = {
-  registryUrl: string;
-  tarball: string;
-  chunkSize?: number;
-  quiet?: boolean;
-  sslVerify?: boolean;
-  auth?: {
-    username: string;
-    password: string;
-  };
-};
-
 export type Headers = {
   [key: string]: string;
 };
 
-export type FileMetaData = {
+export type ChunkMetaData = {
   digest: string;
   size: number;
 };
 
-export const RequestHeaders = {
-  CONTENT_TYPE: 'Content-Type',
-  CONTENT_LENGTH: 'Content-Length',
-  CONTENT_RANGE: 'Content-Range'
-};
+export enum RequestHeaders {
+  CONTENT_TYPE = 'Content-Type',
+  CONTENT_LENGTH = 'Content-Length',
+  CONTENT_RANGE = 'Content-Range'
+}
 
-export const ContentTypes = {
-  APPLICATION_OCTET_STREAM: 'application/octet-stream',
-  APPLICATION_MANIFEST: 'application/vnd.docker.distribution.manifest.v2+json',
-  APPLICATION_LAYER: 'application/vnd.docker.image.rootfs.diff.tar',
-  APPLICATION_CONFIG: 'application/vnd.docker.container.image.v1+json'
-};
+export enum ContentTypes {
+  APPLICATION_OCTET_STREAM = 'application/octet-stream',
+  APPLICATION_MANIFEST = 'application/vnd.docker.distribution.manifest.v2+json',
+  APPLICATION_LAYER = 'application/vnd.docker.image.rootfs.diff.tar',
+  APPLICATION_CONFIG = 'application/vnd.docker.container.image.v1+json'
+}
 
-export type LoggerConfig = {
-  quiet: boolean;
+export type Logger = {
+  info: (msg: string) => void;
+  debug: (msg: string) => void;
+  warn: (msg: string) => void;
+  error: (msg: string) => void;
 };
 
 export type ApplicationConfiguration = {
   registryUrl: string;
   tarball: string;
   chunkSize: number;
-  quiet: boolean;
+  logger: Logger;
   sslVerify: boolean;
   auth?: {
     username: string;
     password: string;
   };
 };
+
+export type DockerTarPusherOptions = Partial<
+  Pick<ApplicationConfiguration, 'chunkSize' | 'logger' | 'sslVerify' | 'auth'>
+> &
+  Required<Pick<ApplicationConfiguration, 'registryUrl' | 'tarball'>>;

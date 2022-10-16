@@ -1,7 +1,7 @@
 import tar from 'tar';
 import fs from 'fs';
 import os from 'os';
-import WorkDirUtils from '../src/WorkDirUtils';
+import WorkDirUtils from '../src/utils/WorkDirUtils';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { rawManifest } from './fixtures/manifest';
