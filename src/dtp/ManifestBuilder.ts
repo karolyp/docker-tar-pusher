@@ -1,13 +1,12 @@
-import { Config, ContentTypes, Layer, RegistryManifest } from './types';
+import { ChunkMetaData, Config, ContentTypes, Layer, RegistryManifest } from '../types';
+import DockerTarPusherError from '../errors/DockerTarPusherError';
 
 export default class ManifestBuilder {
   private layers?: Layer[];
   private config?: Config;
 
   public buildManifest(): RegistryManifest {
-    if (!this.config || !this.layers) {
-      throw new Error('Manifest config or layers are not set');
-    }
+    if (!this.config || !this.layers) throw new DockerTarPusherError('Manifest config or layers are not set');
     return {
       config: this.config,
       layers: this.layers,
@@ -16,7 +15,7 @@ export default class ManifestBuilder {
     };
   }
 
-  public addLayer(digest: string, size: number): void {
+  public addLayer({ digest, size }: ChunkMetaData): void {
     if (!this.layers) {
       this.layers = [];
     }
@@ -27,7 +26,7 @@ export default class ManifestBuilder {
     });
   }
 
-  public setConfig(digest: string, size: number): void {
+  public setConfig({ digest, size }: ChunkMetaData): void {
     this.config = {
       digest,
       size,

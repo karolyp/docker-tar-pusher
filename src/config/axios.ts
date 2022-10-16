@@ -1,6 +1,6 @@
 import https from 'https';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { ApplicationConfiguration } from './types';
+import { ApplicationConfiguration } from '../types';
 
 export const createInstance = (config: ApplicationConfiguration): AxiosInstance => {
   const axiosConfig: AxiosRequestConfig = {
