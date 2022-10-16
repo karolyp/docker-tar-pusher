@@ -2,9 +2,7 @@
 
 [![build](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml/badge.svg)](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml)
 
-With this library you can push tar Docker images directly to a Docker registry without the need of having them loaded
-into the
-Docker Engine, re-tagging and pushing.
+With this library you can push tar Docker images directly to a Docker registry without the need of having them loaded into the Docker Engine, re-tagging and pushing.
 
 The library uses [chunked upload](https://docs.docker.com/registry/spec/api/#pushing-an-image) to push the layers.
 
@@ -28,7 +26,7 @@ during the process.
 However, you might want to call this clean-up function on in one of your shutdown hooks in order to remove
 any leftovers in case of a shutdown.
 
-## Example
+## Examples
 
 ### Quickstart
 
