@@ -62,9 +62,13 @@ export type ApplicationConfiguration = {
     username: string;
     password: string;
   };
+  image?: {
+    name: string;
+    version: string;
+  };
 };
 
 export type DockerTarPusherOptions = Partial<
-  Pick<ApplicationConfiguration, 'chunkSize' | 'logger' | 'sslVerify' | 'auth'>
+  Pick<ApplicationConfiguration, 'chunkSize' | 'logger' | 'sslVerify' | 'auth' | 'image'>
 > &
   Required<Pick<ApplicationConfiguration, 'registryUrl' | 'tarball'>>;

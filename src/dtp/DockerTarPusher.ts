@@ -29,7 +29,9 @@ export default class DockerTarPusher {
       await this.prepareTarball();
       const { RepoTags, Layers, Config } = await this.loadManifest();
       for (const repoTag of RepoTags) {
-        const [image, tag] = repoTag.split(':');
+        const [image, tag] = this.config.image
+          ? [this.config.image.name, this.config.image.version]
+          : repoTag.split(':');
         logger.info(`[${image}:${tag}] Push started.`);
         for await (const layer of Layers) {
           logger.debug(`[${image}:${tag}] Pushing layer ${layer.split('/')[0]}...`);
