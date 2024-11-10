@@ -2,7 +2,8 @@
 
 [![build](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml/badge.svg)](https://github.com/karolyp/docker-tar-pusher/actions/workflows/node.js.yml)
 
-With this library you can push tar Docker images directly to a Docker registry without the need of having them loaded into the Docker Engine, re-tagging and pushing.
+With this library you can push tar Docker images directly to a Docker registry without the need of having them loaded
+into the Docker Engine, re-tagging and pushing.
 
 The library uses [chunked upload](https://docs.docker.com/registry/spec/api/#pushing-an-image) to push the layers.
 
@@ -18,20 +19,24 @@ First, you have to create a configuration object with the following properties:
 - logger (optional): specify custom applicationLogger, defaults to console.log
 - sslVerify (optional): should reject invalid TLS certificates, defaults to true
 - auth (optional): HTTP Basic auth containing the username and password, defaults to empty
+- image (optional): image name and version, defaults to empty
+
+Then, you can create a new instance of the `DockerTarPusher` class with the configuration object.
+After that, you can call the `pushToRegistry` method to start the upload process.
 
 ### Clean-up
 
 After a successful upload, the library will take care about cleaning up the temporary files that have been created
 during the process.
 However, you might want to call this clean-up function on in one of your shutdown hooks in order to remove
-any leftovers in case of a shutdown.
+any leftovers in case the application exists unexpectedly.
 
 ## Examples
 
 ### Quickstart
 
 ```typescript
-import {DockerTarPusher, DockerTarPusherOptions} from 'docker-tar-pusher';
+import { DockerTarPusher, DockerTarPusherOptions } from 'docker-tar-pusher';
 
 const options: DockerTarPusherOptions = {
   registryUrl: 'http://localhost:5000',
@@ -45,7 +50,7 @@ await dockerTarPusher.pushToRegistry();
 ### Complete example with custom logger
 
 ```typescript
-import {DockerTarPusher, DockerTarPusherOptions, Logger} from 'docker-tar-pusher';
+import { DockerTarPusher, DockerTarPusherOptions, Logger } from 'docker-tar-pusher';
 
 const myLogger: Logger = {
   error: (msg: string): void => {
@@ -71,6 +76,10 @@ const options: DockerTarPusherOptions = {
   auth: {
     username: 'testuser',
     password: 'testpassword'
+  },
+  image: {
+    name: 'my-image',
+    version: '1.2.3'
   }
 };
 const dockerTarPusher = new DockerTarPusher(options);
