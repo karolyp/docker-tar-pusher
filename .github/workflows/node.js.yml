@@ -43,5 +43,8 @@ jobs:
           docker pull busybox
           docker tag busybox localhost:5000/busybox
           docker push localhost:5000/busybox
+          docker rmi busybox
+          docker pull localhost:5000/busybox
+          docker run -it --rm localhost:5000/busybox echo "Hello, world!"
 #          docker save busybox | gzip > busybox.tar.gz
 #          ls -al
