@@ -46,6 +46,12 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: pnpm exec commitlint --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
+      - name: Check formatting
+        run: pnpm exec prettier --check .
+
+      - name: Lint
+        run: pnpm exec eslint .
+
       - name: Run tests
         env:
           REGISTRY_URL: 'http://localhost:5000'
