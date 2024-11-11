@@ -46,3 +46,6 @@ jobs:
         env:
           REGISTRY_URL: 'http://localhost:5000'
         run: pnpm test:ci
+
+      - name: Report Coverage
+        uses: davelosert/vitest-coverage-report-action@v2
