@@ -7,6 +7,8 @@ on:
 jobs:
   cache-and-install:
     runs-on: ubuntu-latest
+    env:
+      TARBALL_PATH: /tmp/image.tar.gz
 
     services:
       registry:
@@ -21,7 +23,7 @@ jobs:
       - name: Create tarball from busybox image
         run: |
           docker pull busybox
-          docker save busybox | gzip > /tmp/busybox.tar.gz
+          docker save busybox | gzip > $TARBALL_PATH
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,5 +45,4 @@ jobs:
       - name: Run tests
         env:
           REGISTRY_URL: 'http://localhost:5000'
-          TARBALL: '/tmp/busybox.tar.gz'
         run: pnpm test

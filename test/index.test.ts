@@ -3,7 +3,7 @@ import { DockerTarPusher } from '../src';
 describe('test main', () => {
   it('should upload image to registry', async () => {
     const dtp = new DockerTarPusher({
-      tarball: process.env.TARBALL!,
+      tarball: process.env.TARBALL_PATH!,
       registryUrl: process.env.REGISTRY_URL!
     });
 
