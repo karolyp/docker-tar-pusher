@@ -49,7 +49,7 @@ jobs:
       - name: Run tests
         env:
           REGISTRY_URL: 'http://localhost:5000'
-        run: pnpm test:ci
+        run: pnpm test
 
       - name: Report Coverage
         uses: davelosert/vitest-coverage-report-action@v2
