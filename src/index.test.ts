@@ -4,9 +4,9 @@ import { execSync } from 'node:child_process';
 const image = 'busybox';
 const tarball = '/tmp/image.tar.gz';
 const registryUrl = process.env.REGISTRY_URL || 'http://localhost:5000';
+const docker = process.env.GITHUB_ACTIONS ? 'docker' : 'podman';
 
 beforeAll(() => {
-  const docker = process.env.GITHUB_ACTIONS ? 'docker' : 'podman';
   execSync(`${docker} pull ${image}:latest`);
   execSync(`${docker} save ${image}:latest | gzip > ${tarball}`);
 });
