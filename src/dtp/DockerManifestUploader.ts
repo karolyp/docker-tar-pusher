@@ -17,7 +17,8 @@ export default class DockerManifestUploader {
     const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
     try {
       await this.axios.put(url, this.manifestBuilder.buildManifest(), { headers });
-    } catch ({ message }) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
       throw new DockerTarPusherError(`Error during pushing manifest. Message: ${message}`, {
         url,
         image,

@@ -18,7 +18,8 @@ export default class WorkDirUtils {
 
     try {
       await tar.extract({ file: archive, cwd: this.cwd });
-    } catch ({ message }) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
       throw new DockerTarPusherError(`Cannot extract ${archive}. Message: ${message}`, {
         cwd: this.cwd,
         file: archive
