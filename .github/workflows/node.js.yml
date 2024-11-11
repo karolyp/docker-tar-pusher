@@ -18,33 +18,30 @@ jobs:
           --name registry
 
     steps:
+      - name: Create tarball from busybox image
+        run: |
+          docker pull busybox
+          docker save busybox | gzip > busybox.tar.gz
+
       - name: Checkout
         uses: actions/checkout@v4
 
-#      - uses: pnpm/action-setup@v4
-#        name: Install pnpm
-#        with:
-#          run_install: false
-#
-#      - name: Install Node.js
-#        uses: actions/setup-node@v4
-#        with:
-#          node-version-file: '.nvmrc'
-#          cache: 'pnpm'
-#
-#      - name: Install dependencies
-#        run: pnpm install
-#
-#      - name: Run tests
-#        run: pnpm test
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          run_install: false
 
-      - name: Test Docker commands
-        run: |
-          docker pull busybox
-          docker tag busybox localhost:5000/busybox
-          docker push localhost:5000/busybox
-          docker rmi busybox
-          docker pull localhost:5000/busybox
-          docker run -it --rm localhost:5000/busybox echo "Hello, world!"
-#          docker save busybox | gzip > busybox.tar.gz
-#          ls -al
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        env:
+          REGISTRY_URL: 'http://localhost:5000'
+          TARBALL: 'busybox.tar.gz'
+        run: pnpm test
