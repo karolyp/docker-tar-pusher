@@ -7,9 +7,6 @@ on:
 jobs:
   cache-and-install:
     runs-on: ubuntu-latest
-    env:
-      TARBALL_PATH: /tmp/image.tar.gz
-
     services:
       registry:
         image: registry:2
@@ -20,11 +17,6 @@ jobs:
           --name registry
 
     steps:
-      - name: Create tarball from busybox image
-        run: |
-          docker pull busybox
-          docker save busybox | gzip > $TARBALL_PATH
-
       - name: Checkout
         uses: actions/checkout@v4
 
