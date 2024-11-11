@@ -54,7 +54,7 @@ jobs:
       - name: Run tests
         env:
           REGISTRY_URL: 'http://localhost:5000'
-        run: pnpm test
+        run: pnpm test -- --coverage
 
       - name: Report Coverage
         if: ${{ github.event_name == 'pull_request' }}
