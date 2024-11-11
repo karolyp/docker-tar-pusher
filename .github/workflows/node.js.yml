@@ -1,9 +1,6 @@
-name: Check branch
+name: Check pull request
 
 on:
-  push:
-    branches:
-      - improve-tooling
   pull_request:
     branches:
       - master
@@ -23,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
