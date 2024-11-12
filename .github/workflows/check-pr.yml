@@ -62,10 +62,3 @@ jobs:
       - name: Report Coverage
         if: ${{ github.event_name == 'pull_request' }}
         uses: davelosert/vitest-coverage-report-action@v2
-
-      - name: Create Release Pull Request or Publish to npm
-        uses: changesets/action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          commit: 'chore: version packages'

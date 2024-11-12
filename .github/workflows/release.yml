@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - master
+      - improve-tooling
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -26,10 +26,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
+        run: pnpm install --frozen-lockfile --ignore-scripts
+#
+#      - name: Build
+#        run: pnpm build
 
       - name: Create Release Pull Request or Publish to npm
         uses: changesets/action@v1
