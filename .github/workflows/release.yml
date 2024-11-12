@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - improve-tooling
+      - master
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
