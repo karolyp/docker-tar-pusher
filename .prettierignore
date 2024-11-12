@@ -1,0 +1,6 @@
+build/
+coverage/
+pnpm-lock.yaml
+.prettierrc
+.eslintrc.js
+CHANGELOG.md

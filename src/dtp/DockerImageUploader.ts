@@ -1,9 +1,10 @@
-import { ApplicationConfiguration, ContentTypes, ChunkMetaData, Headers, RequestHeaders } from '../types';
 import crypto from 'crypto';
+import type { AxiosInstance } from 'axios';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
-import WorkDirUtils from '../utils/WorkDirUtils';
-import { AxiosInstance } from 'axios';
-import ManifestBuilder from './ManifestBuilder';
+import type { ApplicationConfiguration, ChunkMetaData, Headers } from '../types';
+import { ContentTypes, RequestHeaders } from '../types';
+import type WorkDirUtils from '../utils/WorkDirUtils';
+import type ManifestBuilder from './ManifestBuilder';
 
 export default class DockerImageUploader {
   constructor(
@@ -12,6 +13,18 @@ export default class DockerImageUploader {
     private readonly axios: AxiosInstance,
     private readonly manifestBuilder: ManifestBuilder
   ) {}
+
+  public async handleLayer(image: string, layerFile: string): Promise<void> {
+    const uploadUrl = await this.initiateUpload(image);
+    const chunkMetaData = await this.pushFileInChunks(uploadUrl, layerFile);
+    this.manifestBuilder.addLayer(chunkMetaData);
+  }
+
+  public async handleConfig(image: string, configFile: string): Promise<void> {
+    const uploadUrl = await this.initiateUpload(image);
+    const chunkMetaData = await this.pushFileInChunks(uploadUrl, configFile);
+    this.manifestBuilder.setConfig(chunkMetaData);
+  }
 
   private async pushFileInChunks(uploadUrl: string, file: string): Promise<ChunkMetaData> {
     const sha256 = crypto.createHash('sha256');
@@ -38,7 +51,8 @@ export default class DockerImageUploader {
         digest,
         size: bytesRead
       };
-    } catch ({ message }) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
       throw new DockerTarPusherError(`${file} Error during pushing file. Message: ${message}`, {
         uploadUrl,
         fileName: file
@@ -52,24 +66,13 @@ export default class DockerImageUploader {
     [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
   });
 
-  public async handleLayer(image: string, layerFile: string): Promise<void> {
-    const uploadUrl = await this.initiateUpload(image);
-    const chunkMetaData = await this.pushFileInChunks(uploadUrl, layerFile);
-    this.manifestBuilder.addLayer(chunkMetaData);
-  }
-
-  public async handleConfig(image: string, configFile: string): Promise<void> {
-    const uploadUrl = await this.initiateUpload(image);
-    const chunkMetaData = await this.pushFileInChunks(uploadUrl, configFile);
-    this.manifestBuilder.setConfig(chunkMetaData);
-  }
-
   private async initiateUpload(image: string): Promise<string> {
     const startUploadUrl = `${this.config.registryUrl}/v2/${image}/blobs/uploads/`;
     try {
       const { headers } = await this.axios.post(startUploadUrl);
       return headers['location'] || ''; // FIXME: quickfix for axios' breaking API change
-    } catch ({ message }) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
       throw new DockerTarPusherError(`Error during initiating upload. Message: ${message}`, { image });
     }
   }

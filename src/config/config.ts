@@ -1,4 +1,4 @@
-import { ApplicationConfiguration, DockerTarPusherOptions } from '../types';
+import type { ApplicationConfiguration, DockerTarPusherOptions } from '../types';
 import { consoleLogger, logger, setApplicationLogger } from '../utils/logger';
 
 const defaultConfiguration: Pick<ApplicationConfiguration, 'logger' | 'chunkSize' | 'sslVerify'> = {

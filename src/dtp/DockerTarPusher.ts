@@ -1,12 +1,12 @@
-import { ApplicationConfiguration, DockerTarPusherOptions, Manifest } from '../types';
-import WorkDirUtils from '../utils/WorkDirUtils';
-import { applyConfiguration } from '../config/config';
-import { logger } from '../utils/logger';
-import DockerTarPusherError from '../errors/DockerTarPusherError';
-import DockerImageUploader from './DockerImageUploader';
 import { createInstance } from '../config/axios';
-import ManifestBuilder from './ManifestBuilder';
+import { applyConfiguration } from '../config/config';
+import DockerTarPusherError from '../errors/DockerTarPusherError';
+import type { ApplicationConfiguration, DockerTarPusherOptions, Manifest } from '../types';
+import WorkDirUtils from '../utils/WorkDirUtils';
+import { logger } from '../utils/logger';
+import DockerImageUploader from './DockerImageUploader';
 import DockerManifestUploader from './DockerManifestUploader';
+import ManifestBuilder from './ManifestBuilder';
 
 export default class DockerTarPusher {
   private readonly workDirUtils: WorkDirUtils;

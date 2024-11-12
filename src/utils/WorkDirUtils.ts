@@ -1,10 +1,10 @@
-import tar from 'tar';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { Manifest } from '../types';
+import path from 'path';
+import tar from 'tar';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
 import WorkingDirectoryNotSetError from '../errors/WorkingDirectoryNotSetError';
+import type { Manifest } from '../types';
 
 export default class WorkDirUtils {
   private cwd?: string;
@@ -18,7 +18,8 @@ export default class WorkDirUtils {
 
     try {
       await tar.extract({ file: archive, cwd: this.cwd });
-    } catch ({ message }) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown error';
       throw new DockerTarPusherError(`Cannot extract ${archive}. Message: ${message}`, {
         cwd: this.cwd,
         file: archive

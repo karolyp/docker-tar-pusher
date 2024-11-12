@@ -1,5 +1,6 @@
-import { ChunkMetaData, Config, ContentTypes, Layer, RegistryManifest } from '../types';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
+import type { ChunkMetaData, Config, Layer, RegistryManifest } from '../types';
+import { ContentTypes } from '../types';
 
 export default class ManifestBuilder {
   private layers?: Layer[];
