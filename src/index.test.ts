@@ -4,7 +4,7 @@ import { DockerTarPusher } from './index';
 const image = 'busybox';
 const tarball = '/tmp/image.tar.gz';
 const registryUrl = process.env.REGISTRY_URL || 'http://localhost:5000';
-const docker = process.env.GITHUB_ACTIONS ? 'docker' : 'podman';
+const docker = process.env.CI ? 'docker' : 'podman';
 
 beforeAll(() => {
   execSync(`${docker} pull ${image}:latest`);
