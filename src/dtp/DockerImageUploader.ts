@@ -1,9 +1,10 @@
-import { ApplicationConfiguration, ChunkMetaData, ContentTypes, Headers, RequestHeaders } from '../types';
 import crypto from 'crypto';
+import type { AxiosInstance } from 'axios';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
-import WorkDirUtils from '../utils/WorkDirUtils';
-import { AxiosInstance } from 'axios';
-import ManifestBuilder from './ManifestBuilder';
+import type { ApplicationConfiguration, ChunkMetaData, Headers} from '../types';
+import { ContentTypes, RequestHeaders } from '../types';
+import type WorkDirUtils from '../utils/WorkDirUtils';
+import type ManifestBuilder from './ManifestBuilder';
 
 export default class DockerImageUploader {
   constructor(

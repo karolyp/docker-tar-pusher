@@ -1,7 +1,8 @@
-import { ApplicationConfiguration, ContentTypes, RequestHeaders } from '../types';
-import { AxiosInstance } from 'axios';
-import ManifestBuilder from './ManifestBuilder';
+import type { AxiosInstance } from 'axios';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
+import type { ApplicationConfiguration} from '../types';
+import { ContentTypes, RequestHeaders } from '../types';
+import type ManifestBuilder from './ManifestBuilder';
 
 export default class DockerManifestUploader {
   constructor(

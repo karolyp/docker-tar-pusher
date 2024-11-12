@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
 import { config } from 'dotenv';
+import { defineConfig } from 'vitest/config';
 
 const isCI = !!process.env.GITHUB_ACTIONS;
 const dotenvFile = isCI ? '.env.ci' : '.env.test';

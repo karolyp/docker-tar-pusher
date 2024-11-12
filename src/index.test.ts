@@ -1,5 +1,5 @@
-import { DockerTarPusher } from './index';
 import { execSync } from 'node:child_process';
+import { DockerTarPusher } from './index';
 
 const image = 'busybox';
 const tarball = '/tmp/image.tar.gz';

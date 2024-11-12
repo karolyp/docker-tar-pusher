@@ -1,10 +1,10 @@
-import tar from 'tar';
 import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { Manifest } from '../types';
+import path from 'path';
+import tar from 'tar';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
 import WorkingDirectoryNotSetError from '../errors/WorkingDirectoryNotSetError';
+import type { Manifest } from '../types';
 
 export default class WorkDirUtils {
   private cwd?: string;
