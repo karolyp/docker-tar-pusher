@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { AxiosInstance } from 'axios';
 import DockerTarPusherError from '../errors/DockerTarPusherError';
-import type { ApplicationConfiguration, ChunkMetaData, Headers} from '../types';
+import type { ApplicationConfiguration, ChunkMetaData, Headers } from '../types';
 import { ContentTypes, RequestHeaders } from '../types';
 import type WorkDirUtils from '../utils/WorkDirUtils';
 import type ManifestBuilder from './ManifestBuilder';
