@@ -18,6 +18,7 @@ jobs:
           --name registry
 
     steps:
+      - run: env
       - name: Checkout
         uses: actions/checkout@v4
         with:
