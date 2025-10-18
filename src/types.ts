@@ -3,26 +3,19 @@ import * as v from 'valibot';
 export const ManifestSchema = v.object({
   Config: v.string(),
   RepoTags: v.array(v.string()),
-  Layers: v.array(v.string()),
+  Layers: v.array(v.string())
 });
 
 export type Manifest = v.InferInput<typeof ManifestSchema>;
 
-export const LoggerSchema = v.object({
-  info: v.function(),
-  debug: v.function(),
-  warn: v.function(),
-  error: v.function(),
-});
-
 export const AuthSchema = v.object({
   username: v.string(),
-  password: v.string(),
+  password: v.string()
 });
 
 export const ImageSchema = v.object({
   name: v.string(),
-  version: v.string(),
+  version: v.string()
 });
 
 export const ProgressCallbackSchema = v.function();
@@ -32,11 +25,10 @@ export const DockerTarPusherOptionsSchema = v.object({
   registryUrl: v.string(),
   tarball: v.string(),
   chunkSize: v.optional(v.number()),
-  logger: v.optional(LoggerSchema),
   sslVerify: v.optional(v.boolean()),
   auth: v.optional(AuthSchema),
   image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
+  onProgress: v.optional(ProgressCallbackSchema)
 });
 
 // Derived schema for internal application configuration with required fields
@@ -44,11 +36,10 @@ export const ApplicationConfigurationSchema = v.object({
   registryUrl: v.string(),
   tarball: v.string(),
   chunkSize: v.number(),
-  logger: LoggerSchema,
   sslVerify: v.boolean(),
   auth: v.optional(AuthSchema),
   image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
+  onProgress: v.optional(ProgressCallbackSchema)
 });
 
 export type Layer = {
@@ -92,9 +83,7 @@ export enum ContentTypes {
   APPLICATION_CONFIG = 'application/vnd.docker.container.image.v1+json'
 }
 
-export type Logger = v.InferInput<typeof LoggerSchema>;
 export type Auth = v.InferInput<typeof AuthSchema>;
 export type Image = v.InferInput<typeof ImageSchema>;
 export type ProgressCallback = v.InferInput<typeof ProgressCallbackSchema>;
 export type ApplicationConfiguration = v.InferInput<typeof ApplicationConfigurationSchema>;
-export type DockerTarPusherOptions = v.InferInput<typeof DockerTarPusherOptionsSchema>;

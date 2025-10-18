@@ -3,28 +3,34 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extract } from 'tar';
 import * as v from 'valibot';
-import { AxiosInstance } from 'axios';
-import { createInstance } from '../config/axios';
-import { applyConfiguration } from '../config/config';
 import ManifestError from '../errors/ManifestError';
-import { ManifestSchema, type ApplicationConfiguration, type DockerTarPusherOptions } from '../types';
+import { ApplicationConfiguration, DockerTarPusherOptionsSchema, ManifestSchema } from '../types';
 import DockerRegistryService from './DockerRegistryService';
 import ManifestBuilder from './ManifestBuilder';
+
+export type DockerTarPusherOptions = v.InferInput<typeof DockerTarPusherOptionsSchema>;
 
 export default class DockerTarPusher {
   private readonly config: ApplicationConfiguration;
   private readonly dockerRegistryService: DockerRegistryService;
-  private readonly axios: AxiosInstance;
-  private readonly manifestBuilder: ManifestBuilder;
 
   constructor(options: DockerTarPusherOptions) {
-    this.config = applyConfiguration(options);
-    this.manifestBuilder = new ManifestBuilder();
-    this.axios = createInstance(this.config);
-    this.dockerRegistryService = new DockerRegistryService(this.config, this.axios);
+    this.config = {
+      sslVerify: true,
+      chunkSize: 10 * 1024 * 1024,
+      ...options
+    };
+
+    this.dockerRegistryService = new DockerRegistryService({
+      chunkSize: this.config.chunkSize,
+      registryUrl: this.config.registryUrl,
+      sslVerify: this.config.sslVerify,
+      auth: this.config.auth
+    });
   }
 
   async pushToRegistry() {
+    const manifestBuilder = new ManifestBuilder();
     let tempDir: string | null = null;
     try {
       const workDir = await mkdtemp(join(tmpdir(), 'dtp-'));
@@ -49,7 +55,7 @@ export default class DockerTarPusher {
         });
 
         const layerResults = await Promise.all(layerPromises);
-        layerResults.forEach((result) => this.manifestBuilder.addLayer(result));
+        layerResults.forEach((result) => manifestBuilder.addLayer(result));
 
         this.config.onProgress?.({
           type: 'config',
@@ -60,7 +66,7 @@ export default class DockerTarPusher {
           item: Config
         });
         const configResult = await this.dockerRegistryService.upload(workDir, image, Config);
-        this.manifestBuilder.setConfig(configResult);
+        manifestBuilder.setConfig(configResult);
 
         this.config.onProgress?.({
           type: 'manifest',
@@ -71,7 +77,7 @@ export default class DockerTarPusher {
           item: `${image}:${tag}`
         });
 
-        const manifest = this.manifestBuilder.buildManifest();
+        const manifest = manifestBuilder.buildManifest();
         await this.dockerRegistryService.pushManifest(manifest, image, tag);
       }
     } finally {

@@ -5,11 +5,27 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import RegistryError from '../errors/RegistryError';
 import UploadError from '../errors/UploadError';
-import type { ApplicationConfiguration, ChunkMetaData, Headers, RegistryManifest } from '../types';
+import type { Auth, ChunkMetaData, Headers, RegistryManifest } from '../types';
 import { ContentTypes, RequestHeaders } from '../types';
+import { createInstance } from '../config/axios';
+
+type DockerRegistryServiceConfig = {
+  chunkSize: number;
+  registryUrl: string;
+  sslVerify: boolean;
+  auth?: Auth;
+};
 
 export default class DockerRegistryService {
-  constructor(private readonly config: ApplicationConfiguration, private readonly axios: AxiosInstance) {}
+  private readonly axios: AxiosInstance;
+
+  constructor(private readonly config: DockerRegistryServiceConfig) {
+    this.axios = createInstance({
+      chunkSize: this.config.chunkSize,
+      sslVerify: this.config.sslVerify,
+      auth: this.config.auth
+    });
+  }
 
   public async upload(cwd: string, image: string, file: string) {
     const uploadUrl = await this.initiateUpload(image);
