@@ -46,7 +46,7 @@ jobs:
         run: pnpm commitlint --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
       - name: Check code with Biome
-        run: pnpm check
+        run: pnpm biome ci src/
 
       - name: Build
         run: pnpm build

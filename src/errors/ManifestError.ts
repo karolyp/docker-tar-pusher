@@ -5,10 +5,10 @@ export default class ManifestError extends Error {
       manifestPath?: string;
       layer?: string;
       config?: string;
-      operation?: 'parse' | 'build' | 'validate';
-    }
+      operation?: "parse" | "build" | "validate";
+    },
   ) {
     super(message);
-    this.name = 'ManifestError';
+    this.name = "ManifestError";
   }
 }

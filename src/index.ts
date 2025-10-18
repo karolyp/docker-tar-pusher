@@ -1,3 +1,3 @@
-import DockerTarPusher, { DockerTarPusherOptions } from './dtp/DockerTarPusher';
+import DockerTarPusher, { DockerTarPusherOptions } from "./dtp/DockerTarPusher";
 
 export { DockerTarPusher, DockerTarPusherOptions };

@@ -7,9 +7,9 @@ export default class RegistryError extends Error {
       image?: string;
       tag?: string;
       operation?: string;
-    }
+    },
   ) {
     super(message);
-    this.name = 'RegistryError';
+    this.name = "RegistryError";
   }
 }

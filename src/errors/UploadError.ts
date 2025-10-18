@@ -6,10 +6,10 @@ export default class UploadError extends Error {
       uploadUrl?: string;
       bytesUploaded?: number;
       totalBytes?: number;
-      operation?: 'initiate' | 'chunk' | 'finalize';
-    }
+      operation?: "initiate" | "chunk" | "finalize";
+    },
   ) {
     super(message);
-    this.name = 'UploadError';
+    this.name = "UploadError";
   }
 }
