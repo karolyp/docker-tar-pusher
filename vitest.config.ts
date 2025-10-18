@@ -10,7 +10,7 @@ export default defineConfig({
     }).parsed,
     globals: true,
     coverage: {
-      exclude: ['commitlint.config.mjs', 'vitest.config.ts', '.eslintrc.js'],
+      exclude: ['commitlint.config.mjs', 'vitest.config.ts'],
       reporter: ['text', 'json-summary', 'json']
     }
   }
