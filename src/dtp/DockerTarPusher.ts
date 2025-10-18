@@ -21,7 +21,7 @@ export default class DockerTarPusher {
     this.config = applyConfiguration(options);
     this.manifestBuilder = new ManifestBuilder();
     this.axios = createInstance(this.config);
-    this.dockerRegistryService = new DockerRegistryService(this.config, this.axios, this.manifestBuilder);
+    this.dockerRegistryService = new DockerRegistryService(this.config, this.axios);
   }
 
   async pushToRegistry() {
@@ -45,10 +45,11 @@ export default class DockerTarPusher {
             totalBytes: 0,
             item: layer
           });
-          return this.dockerRegistryService.uploadLayer(workDir, image, layer);
+          return this.dockerRegistryService.upload(workDir, image, layer);
         });
 
-        await Promise.all(layerPromises);
+        const layerResults = await Promise.all(layerPromises);
+        layerResults.forEach((result) => this.manifestBuilder.addLayer(result));
 
         this.config.onProgress?.({
           type: 'config',
@@ -58,7 +59,8 @@ export default class DockerTarPusher {
           totalBytes: 0,
           item: Config
         });
-        await this.dockerRegistryService.uploadConfig(workDir, image, Config);
+        const configResult = await this.dockerRegistryService.upload(workDir, image, Config);
+        this.manifestBuilder.setConfig(configResult);
 
         this.config.onProgress?.({
           type: 'manifest',
@@ -68,7 +70,9 @@ export default class DockerTarPusher {
           totalBytes: 0,
           item: `${image}:${tag}`
         });
-        await this.dockerRegistryService.pushManifest(image, tag);
+
+        const manifest = this.manifestBuilder.buildManifest();
+        await this.dockerRegistryService.pushManifest(manifest, image, tag);
       }
     } finally {
       if (tempDir) {

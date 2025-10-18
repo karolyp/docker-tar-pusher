@@ -1,40 +1,29 @@
+import type { AxiosInstance } from 'axios';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import type { AxiosInstance } from 'axios';
+import { join } from 'node:path';
 import RegistryError from '../errors/RegistryError';
 import UploadError from '../errors/UploadError';
-import type { ApplicationConfiguration, ChunkMetaData, Headers } from '../types';
+import type { ApplicationConfiguration, ChunkMetaData, Headers, RegistryManifest } from '../types';
 import { ContentTypes, RequestHeaders } from '../types';
-import type ManifestBuilder from './ManifestBuilder';
 
 export default class DockerRegistryService {
-  constructor(
-    private readonly config: ApplicationConfiguration,
-    private readonly axios: AxiosInstance,
-    private readonly manifestBuilder: ManifestBuilder
-  ) {}
+  constructor(private readonly config: ApplicationConfiguration, private readonly axios: AxiosInstance) {}
 
-  public async uploadLayer(cwd: string, image: string, layerFile: string): Promise<void> {
+  public async upload(cwd: string, image: string, file: string) {
     const uploadUrl = await this.initiateUpload(image);
-    const chunkMetaData = await this.pushFileInChunks(cwd, uploadUrl, layerFile);
-    this.manifestBuilder.addLayer(chunkMetaData);
+    const chunkMetaData = await this.pushFileInChunks(cwd, uploadUrl, file);
+    return chunkMetaData;
   }
 
-  public async uploadConfig(cwd: string, image: string, configFile: string): Promise<void> {
-    const uploadUrl = await this.initiateUpload(image);
-    const chunkMetaData = await this.pushFileInChunks(cwd, uploadUrl, configFile);
-    this.manifestBuilder.setConfig(chunkMetaData);
-  }
-
-  public async pushManifest(image: string, tag: string): Promise<void> {
+  public async pushManifest(manifest: RegistryManifest, image: string, tag: string): Promise<void> {
     const headers = {
       [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST
     };
     const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
     try {
-      await this.axios.put(url, this.manifestBuilder.buildManifest(), { headers });
+      await this.axios.put(url, manifest, { headers });
     } catch (e) {
       const statusCode = e instanceof Error && 'response' in e ? (e as any).response?.status : undefined;
       throw new RegistryError(`Failed to push manifest for ${image}:${tag}`, statusCode, {
@@ -86,12 +75,6 @@ export default class DockerRegistryService {
     }
   }
 
-  private getChunkUploadHeaders = (start: number, length: number): Headers => ({
-    [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
-    [RequestHeaders.CONTENT_LENGTH]: String(length),
-    [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
-  });
-
   private async initiateUpload(image: string): Promise<string> {
     const startUploadUrl = `${this.config.registryUrl}/v2/${image}/blobs/uploads/`;
     try {
@@ -106,4 +89,10 @@ export default class DockerRegistryService {
       });
     }
   }
+
+  private getChunkUploadHeaders = (start: number, length: number): Headers => ({
+    [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
+    [RequestHeaders.CONTENT_LENGTH]: String(length),
+    [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`
+  });
 }
