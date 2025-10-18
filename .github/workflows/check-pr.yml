@@ -12,7 +12,7 @@ jobs:
       registry:
         image: registry:2
         ports:
-          - 5000:5000
+          - 15000:5000
         options: >-
           --restart=always
           --name registry
