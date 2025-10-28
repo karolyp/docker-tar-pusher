@@ -1,8 +1,46 @@
-export type Manifest = {
-  Config: string;
-  RepoTags: string[];
-  Layers: string[];
-};
+import * as v from "valibot";
+
+export const ManifestSchema = v.object({
+  Config: v.string(),
+  RepoTags: v.array(v.string()),
+  Layers: v.array(v.string()),
+});
+
+export type Manifest = v.InferInput<typeof ManifestSchema>;
+
+export const AuthSchema = v.object({
+  username: v.string(),
+  password: v.string(),
+});
+
+export const ImageSchema = v.object({
+  name: v.string(),
+  version: v.string(),
+});
+
+export const ProgressCallbackSchema = v.function();
+
+// Base schema with all optional fields for user input
+export const DockerTarPusherOptionsSchema = v.object({
+  registryUrl: v.string(),
+  tarball: v.string(),
+  chunkSize: v.optional(v.number()),
+  sslVerify: v.optional(v.boolean()),
+  auth: v.optional(AuthSchema),
+  image: v.optional(ImageSchema),
+  onProgress: v.optional(ProgressCallbackSchema),
+});
+
+// Derived schema for internal application configuration with required fields
+export const ApplicationConfigurationSchema = v.object({
+  registryUrl: v.string(),
+  tarball: v.string(),
+  chunkSize: v.number(),
+  sslVerify: v.boolean(),
+  auth: v.optional(AuthSchema),
+  image: v.optional(ImageSchema),
+  onProgress: v.optional(ProgressCallbackSchema),
+});
 
 export type Layer = {
   size: number;
@@ -33,42 +71,21 @@ export type ChunkMetaData = {
 };
 
 export enum RequestHeaders {
-  CONTENT_TYPE = 'Content-Type',
-  CONTENT_LENGTH = 'Content-Length',
-  CONTENT_RANGE = 'Content-Range'
+  CONTENT_TYPE = "Content-Type",
+  CONTENT_LENGTH = "Content-Length",
+  CONTENT_RANGE = "Content-Range",
 }
 
 export enum ContentTypes {
-  APPLICATION_OCTET_STREAM = 'application/octet-stream',
-  APPLICATION_MANIFEST = 'application/vnd.docker.distribution.manifest.v2+json',
-  APPLICATION_LAYER = 'application/vnd.docker.image.rootfs.diff.tar',
-  APPLICATION_CONFIG = 'application/vnd.docker.container.image.v1+json'
+  APPLICATION_OCTET_STREAM = "application/octet-stream",
+  APPLICATION_MANIFEST = "application/vnd.docker.distribution.manifest.v2+json",
+  APPLICATION_LAYER = "application/vnd.docker.image.rootfs.diff.tar",
+  APPLICATION_CONFIG = "application/vnd.docker.container.image.v1+json",
 }
 
-export type Logger = {
-  info: (msg: string) => void;
-  debug: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-};
-
-export type ApplicationConfiguration = {
-  registryUrl: string;
-  tarball: string;
-  chunkSize: number;
-  logger: Logger;
-  sslVerify: boolean;
-  auth?: {
-    username: string;
-    password: string;
-  };
-  image?: {
-    name: string;
-    version: string;
-  };
-};
-
-export type DockerTarPusherOptions = Partial<
-  Pick<ApplicationConfiguration, 'chunkSize' | 'logger' | 'sslVerify' | 'auth' | 'image'>
-> &
-  Required<Pick<ApplicationConfiguration, 'registryUrl' | 'tarball'>>;
+export type Auth = v.InferInput<typeof AuthSchema>;
+export type Image = v.InferInput<typeof ImageSchema>;
+export type ProgressCallback = v.InferInput<typeof ProgressCallbackSchema>;
+export type ApplicationConfiguration = v.InferInput<
+  typeof ApplicationConfigurationSchema
+>;

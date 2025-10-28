@@ -1,5 +1,3 @@
-import DockerTarPusher from './dtp/DockerTarPusher';
-import { DockerTarPusherOptions, Logger } from './types';
-import { noOpLogger } from './utils/logger';
+import DockerTarPusher, { DockerTarPusherOptions } from "./dtp/DockerTarPusher";
 
-export { DockerTarPusher, DockerTarPusherOptions, Logger, noOpLogger };
+export { DockerTarPusher, DockerTarPusherOptions };
