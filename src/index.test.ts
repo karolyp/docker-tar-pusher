@@ -2,32 +2,28 @@ import { execSync } from "node:child_process";
 import { beforeAll, describe, expect, test } from "vitest";
 import { DockerTarPusher } from "./index";
 
-const image = "busybox";
-const tarball = "/tmp/image.tar.gz";
+const images = ["busybox", "alpine", "nginx"];
 const registryUrl = process.env.REGISTRY_URL || "http://localhost:5000";
 
 beforeAll(() => {
-  execSync(`docker pull ${image}:latest`);
-  execSync(`docker save ${image}:latest | gzip > ${tarball}`);
+  for (const image of images) {
+    execSync(`docker pull ${image}:latest`);
+    execSync(`docker save ${image}:latest | gzip > /tmp/${image}.tar.gz`);
+  }
 });
 
 describe("DockerTarPusher", () => {
-  test("should upload image to registry", async () => {
+  test.each(images)("should upload %s to registry", async (image) => {
     const dtp = new DockerTarPusher({
-      tarball,
+      tarball: `/tmp/${image}.tar.gz`,
       registryUrl,
     });
 
-    await expect(dtp.pushToRegistry()).resolves.not.toThrow();
+    await dtp.pushToRegistry();
 
-    const result = await fetch(`${registryUrl}/v2/_catalog`, {
-      method: "GET",
-    });
-
+    const result = await fetch(`${registryUrl}/v2/_catalog`);
     const json = (await result.json()) as { repositories: string[] };
 
-    expect(json.repositories).toEqual(
-      expect.arrayContaining([expect.stringContaining(image)]),
-    );
+    expect(json.repositories).toContain(image);
   });
 });
