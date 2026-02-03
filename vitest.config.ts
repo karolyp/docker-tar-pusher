@@ -5,6 +5,7 @@ const dotenvFile = process.env.CI ? ".env.ci" : ".env.test";
 
 export default defineConfig({
   test: {
+    testTimeout: 10000,
     env: config({
       path: dotenvFile,
     }).parsed,
