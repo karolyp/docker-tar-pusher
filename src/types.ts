@@ -1,12 +1,19 @@
 import * as v from "valibot";
 
-export const ManifestSchema = v.object({
-  Config: v.string(),
-  RepoTags: v.array(v.string()),
-  Layers: v.array(v.string()),
-});
+export const ManifestSchema = v.pipe(
+  v.object({
+    Config: v.string(),
+    RepoTags: v.array(v.string()),
+    Layers: v.array(v.string()),
+  }),
+  v.transform(({ Config, RepoTags, Layers }) => ({
+    config: Config,
+    repoTags: RepoTags,
+    layers: Layers,
+  })),
+);
 
-export type Manifest = v.InferInput<typeof ManifestSchema>;
+export type Manifest = v.InferOutput<typeof ManifestSchema>;
 
 export const AuthSchema = v.object({
   username: v.string(),
@@ -20,23 +27,11 @@ export const ImageSchema = v.object({
 
 export const ProgressCallbackSchema = v.function();
 
-// Base schema with all optional fields for user input
 export const DockerTarPusherOptionsSchema = v.object({
   registryUrl: v.string(),
   tarball: v.string(),
-  chunkSize: v.optional(v.number()),
-  sslVerify: v.optional(v.boolean()),
-  auth: v.optional(AuthSchema),
-  image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
-});
-
-// Derived schema for internal application configuration with required fields
-export const ApplicationConfigurationSchema = v.object({
-  registryUrl: v.string(),
-  tarball: v.string(),
-  chunkSize: v.number(),
-  sslVerify: v.boolean(),
+  chunkSize: v.fallback(v.number(), 10 * 1024 * 1024),
+  sslVerify: v.fallback(v.boolean(), true),
   auth: v.optional(AuthSchema),
   image: v.optional(ImageSchema),
   onProgress: v.optional(ProgressCallbackSchema),
@@ -86,6 +81,6 @@ export enum ContentTypes {
 export type Auth = v.InferInput<typeof AuthSchema>;
 export type Image = v.InferInput<typeof ImageSchema>;
 export type ProgressCallback = v.InferInput<typeof ProgressCallbackSchema>;
-export type ApplicationConfiguration = v.InferInput<
-  typeof ApplicationConfigurationSchema
+export type ApplicationConfiguration = v.InferOutput<
+  typeof DockerTarPusherOptionsSchema
 >;

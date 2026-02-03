@@ -6,11 +6,12 @@ import * as v from "valibot";
 import ManifestError from "../errors/ManifestError";
 import {
   type ApplicationConfiguration,
-  type DockerTarPusherOptionsSchema,
+  type ChunkMetaData,
+  DockerTarPusherOptionsSchema,
   ManifestSchema,
 } from "../types";
 import DockerRegistryService from "./DockerRegistryService";
-import ManifestBuilder from "./ManifestBuilder";
+import { buildManifest } from "./ManifestBuilder";
 
 export type DockerTarPusherOptions = v.InferInput<
   typeof DockerTarPusherOptionsSchema
@@ -21,11 +22,7 @@ export default class DockerTarPusher {
   private readonly dockerRegistryService: DockerRegistryService;
 
   constructor(options: DockerTarPusherOptions) {
-    this.config = {
-      sslVerify: true,
-      chunkSize: 10 * 1024 * 1024,
-      ...options,
-    };
+    this.config = v.parse(DockerTarPusherOptionsSchema, options);
 
     this.dockerRegistryService = new DockerRegistryService({
       chunkSize: this.config.chunkSize,
@@ -36,33 +33,32 @@ export default class DockerTarPusher {
   }
 
   async pushToRegistry() {
-    const manifestBuilder = new ManifestBuilder();
-    const tempDir: string | null = null;
+    const tempDir = await mkdtemp(join(tmpdir(), "dtp-"));
     try {
-      const workDir = await mkdtemp(join(tmpdir(), "dtp-"));
-      await extract({ file: this.config.tarball, cwd: workDir });
+      await extract({ file: this.config.tarball, cwd: tempDir });
 
-      const { RepoTags, Layers, Config } = await this.readManifest(workDir);
+      const { repoTags, config, layers } = await this.readManifest(tempDir);
 
-      for (const repoTag of RepoTags) {
+      for (const repoTag of repoTags) {
         const [image, tag] = this.config.image
           ? [this.config.image.name, this.config.image.version]
           : repoTag.split(":");
-        const layerPromises = Layers.map(async (layer, index) => {
+        const layersMetadata: ChunkMetaData[] = [];
+        const layerPromises = layers.map(async (layer, index) => {
           this.config.onProgress?.({
             type: "layer",
             current: index + 1,
-            total: Layers.length,
+            total: layers.length,
             bytesUploaded: 0,
             totalBytes: 0,
             item: layer,
           });
-          return this.dockerRegistryService.upload(workDir, image, layer);
+          return this.dockerRegistryService.upload(tempDir, image, layer);
         });
 
         const layerResults = await Promise.all(layerPromises);
         for (const result of layerResults) {
-          manifestBuilder.addLayer(result);
+          layersMetadata.push(result);
         }
 
         this.config.onProgress?.({
@@ -71,14 +67,13 @@ export default class DockerTarPusher {
           total: 1,
           bytesUploaded: 0,
           totalBytes: 0,
-          item: Config,
+          item: config,
         });
         const configResult = await this.dockerRegistryService.upload(
-          workDir,
+          tempDir,
           image,
-          Config,
+          config,
         );
-        manifestBuilder.setConfig(configResult);
 
         this.config.onProgress?.({
           type: "manifest",
@@ -89,13 +84,11 @@ export default class DockerTarPusher {
           item: `${image}:${tag}`,
         });
 
-        const manifest = manifestBuilder.buildManifest();
+        const manifest = buildManifest(layersMetadata, configResult);
         await this.dockerRegistryService.pushManifest(manifest, image, tag);
       }
     } finally {
-      if (tempDir) {
-        await rm(tempDir, { recursive: true, force: true });
-      }
+      await rm(tempDir, { recursive: true, force: true });
     }
   }
 
