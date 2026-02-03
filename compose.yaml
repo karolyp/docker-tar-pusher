@@ -1,0 +1,6 @@
+services:
+  registry:
+    image: registry:2
+    ports:
+      - "5001:5000"
+    restart: always

@@ -52,8 +52,6 @@ jobs:
         run: pnpm build
 
       - name: Run tests
-        env:
-          REGISTRY_URL: 'http://localhost:5000'
         run: pnpm test --coverage
 
       - name: Report Coverage
