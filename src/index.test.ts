@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { beforeAll, describe, expect, test } from "vitest";
+import { rmSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { DockerTarPusher } from "./index";
 
 const images = ["busybox", "alpine", "nginx"];
@@ -9,6 +10,12 @@ beforeAll(() => {
   for (const image of images) {
     execSync(`docker pull ${image}:latest`);
     execSync(`docker save ${image}:latest | gzip > /tmp/${image}.tar.gz`);
+  }
+}, 120_000);
+
+afterAll(() => {
+  for (const image of images) {
+    rmSync(`/tmp/${image}.tar.gz`, { force: true });
   }
 });
 
