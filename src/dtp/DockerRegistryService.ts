@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { AxiosInstance } from "axios";
+import { type AxiosInstance, isAxiosError } from "axios";
 import { createInstance } from "../config/axios";
 import RegistryError from "../errors/RegistryError";
 import UploadError from "../errors/UploadError";
@@ -29,8 +29,8 @@ export default class DockerRegistryService {
 
   public async upload(cwd: string, image: string, file: string) {
     const uploadUrl = await this.initiateUpload(image);
-    const chunkMetaData = await this.pushFileInChunks(cwd, uploadUrl, file);
-    return chunkMetaData;
+
+    return await this.pushFileInChunks(cwd, uploadUrl, file);
   }
 
   public async pushManifest(
@@ -38,17 +38,15 @@ export default class DockerRegistryService {
     image: string,
     tag: string,
   ): Promise<void> {
-    const headers = {
-      [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST,
-    };
     const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
     try {
-      await this.axios.put(url, manifest, { headers });
+      await this.axios.put(url, manifest, {
+        headers: {
+          [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST,
+        },
+      });
     } catch (e) {
-      const statusCode =
-        e instanceof Error && "response" in e
-          ? (e as Error & { response?: { status?: number } }).response?.status
-          : undefined;
+      const statusCode = isAxiosError(e) ? e.response?.status : undefined;
       throw new RegistryError(
         `Failed to push manifest for ${image}:${tag}`,
         statusCode,
@@ -118,10 +116,7 @@ export default class DockerRegistryService {
       const { headers } = await this.axios.post(startUploadUrl);
       return headers.location || ""; // FIXME: quickfix for axios' breaking API change
     } catch (e) {
-      const statusCode =
-        e instanceof Error && "response" in e
-          ? (e as Error & { response?: { status?: number } }).response?.status
-          : undefined;
+      const statusCode = isAxiosError(e) ? e.response?.status : undefined;
       throw new RegistryError(
         `Failed to initiate upload for image: ${image}`,
         statusCode,

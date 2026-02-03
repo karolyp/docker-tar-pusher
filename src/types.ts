@@ -1,12 +1,17 @@
 import * as v from "valibot";
 
-export const ManifestSchema = v.object({
-  Config: v.string(),
-  RepoTags: v.array(v.string()),
-  Layers: v.array(v.string()),
-});
-
-export type Manifest = v.InferInput<typeof ManifestSchema>;
+export const ManifestSchema = v.pipe(
+  v.object({
+    Config: v.string(),
+    RepoTags: v.array(v.string()),
+    Layers: v.array(v.string()),
+  }),
+  v.transform(({ Config, RepoTags, Layers }) => ({
+    config: Config,
+    repoTags: RepoTags,
+    layers: Layers,
+  })),
+);
 
 export const AuthSchema = v.object({
   username: v.string(),
@@ -20,27 +25,22 @@ export const ImageSchema = v.object({
 
 export const ProgressCallbackSchema = v.function();
 
-// Base schema with all optional fields for user input
-export const DockerTarPusherOptionsSchema = v.object({
-  registryUrl: v.string(),
-  tarball: v.string(),
-  chunkSize: v.optional(v.number()),
-  sslVerify: v.optional(v.boolean()),
-  auth: v.optional(AuthSchema),
-  image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
-});
-
-// Derived schema for internal application configuration with required fields
-export const ApplicationConfigurationSchema = v.object({
-  registryUrl: v.string(),
-  tarball: v.string(),
-  chunkSize: v.number(),
-  sslVerify: v.boolean(),
-  auth: v.optional(AuthSchema),
-  image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
-});
+export const DockerTarPusherOptionsSchema = v.pipe(
+  v.object({
+    registryUrl: v.string(),
+    tarball: v.string(),
+    chunkSize: v.optional(v.number()),
+    sslVerify: v.optional(v.boolean()),
+    auth: v.optional(AuthSchema),
+    image: v.optional(ImageSchema),
+    onProgress: v.optional(ProgressCallbackSchema),
+  }),
+  v.transform((input) => ({
+    ...input,
+    chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
+    sslVerify: input.sslVerify ?? true,
+  })),
+);
 
 export type Layer = {
   size: number;
@@ -84,8 +84,6 @@ export enum ContentTypes {
 }
 
 export type Auth = v.InferInput<typeof AuthSchema>;
-export type Image = v.InferInput<typeof ImageSchema>;
-export type ProgressCallback = v.InferInput<typeof ProgressCallbackSchema>;
-export type ApplicationConfiguration = v.InferInput<
-  typeof ApplicationConfigurationSchema
+export type ApplicationConfiguration = v.InferOutput<
+  typeof DockerTarPusherOptionsSchema
 >;

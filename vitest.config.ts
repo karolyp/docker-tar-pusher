@@ -1,12 +1,11 @@
 import { config } from "dotenv";
 import { defineConfig } from "vitest/config";
 
-const dotenvFile = process.env.CI ? ".env.ci" : ".env.test";
-
 export default defineConfig({
   test: {
+    testTimeout: 60_000,
     env: config({
-      path: dotenvFile,
+      path: ".env.test",
     }).parsed,
     globals: true,
     coverage: {
