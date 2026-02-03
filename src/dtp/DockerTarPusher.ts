@@ -43,23 +43,20 @@ export default class DockerTarPusher {
         const [image, tag] = this.config.image
           ? [this.config.image.name, this.config.image.version]
           : repoTag.split(":");
-        const layersMetadata: ChunkMetaData[] = [];
-        const layerPromises = layers.map(async (layer, index) => {
-          this.config.onProgress?.({
-            type: "layer",
-            current: index + 1,
-            total: layers.length,
-            bytesUploaded: 0,
-            totalBytes: 0,
-            item: layer,
-          });
-          return this.dockerRegistryService.upload(tempDir, image, layer);
-        });
 
-        const layerResults = await Promise.all(layerPromises);
-        for (const result of layerResults) {
-          layersMetadata.push(result);
-        }
+        const layerResults = await Promise.all(
+          layers.map((layer, index) => {
+            this.config.onProgress?.({
+              type: "layer",
+              current: index + 1,
+              total: layers.length,
+              bytesUploaded: 0,
+              totalBytes: 0,
+              item: layer,
+            });
+            return this.dockerRegistryService.upload(tempDir, image, layer);
+          }),
+        );
 
         this.config.onProgress?.({
           type: "config",
@@ -69,6 +66,7 @@ export default class DockerTarPusher {
           totalBytes: 0,
           item: config,
         });
+
         const configResult = await this.dockerRegistryService.upload(
           tempDir,
           image,
@@ -84,7 +82,7 @@ export default class DockerTarPusher {
           item: `${image}:${tag}`,
         });
 
-        const manifest = buildManifest(layersMetadata, configResult);
+        const manifest = buildManifest(layerResults, configResult);
         await this.dockerRegistryService.pushManifest(manifest, image, tag);
       }
     } finally {
