@@ -13,8 +13,6 @@ export const ManifestSchema = v.pipe(
   })),
 );
 
-export type Manifest = v.InferOutput<typeof ManifestSchema>;
-
 export const AuthSchema = v.object({
   username: v.string(),
   password: v.string(),
@@ -27,15 +25,22 @@ export const ImageSchema = v.object({
 
 export const ProgressCallbackSchema = v.function();
 
-export const DockerTarPusherOptionsSchema = v.object({
-  registryUrl: v.string(),
-  tarball: v.string(),
-  chunkSize: v.fallback(v.number(), 10 * 1024 * 1024),
-  sslVerify: v.fallback(v.boolean(), true),
-  auth: v.optional(AuthSchema),
-  image: v.optional(ImageSchema),
-  onProgress: v.optional(ProgressCallbackSchema),
-});
+export const DockerTarPusherOptionsSchema = v.pipe(
+  v.object({
+    registryUrl: v.string(),
+    tarball: v.string(),
+    chunkSize: v.optional(v.number()),
+    sslVerify: v.optional(v.boolean()),
+    auth: v.optional(AuthSchema),
+    image: v.optional(ImageSchema),
+    onProgress: v.optional(ProgressCallbackSchema),
+  }),
+  v.transform((input) => ({
+    ...input,
+    chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
+    sslVerify: input.sslVerify ?? true,
+  })),
+);
 
 export type Layer = {
   size: number;
@@ -79,8 +84,6 @@ export enum ContentTypes {
 }
 
 export type Auth = v.InferInput<typeof AuthSchema>;
-export type Image = v.InferInput<typeof ImageSchema>;
-export type ProgressCallback = v.InferInput<typeof ProgressCallbackSchema>;
 export type ApplicationConfiguration = v.InferOutput<
   typeof DockerTarPusherOptionsSchema
 >;
