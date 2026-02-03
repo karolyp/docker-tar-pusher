@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { DockerTarPusher } from "./index";
 
 const images = ["busybox", "alpine", "nginx"];
-const registryUrl = process.env.REGISTRY_URL || "http://localhost:5000";
+const registryUrl = process.env.REGISTRY_URL || "http://localhost:15000";
 
 beforeAll(() => {
   for (const image of images) {
