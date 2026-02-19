@@ -1,15 +1,12 @@
-export default class UploadError extends Error {
-  constructor(
-    message: string,
-    public readonly context?: {
-      fileName?: string;
-      uploadUrl?: string;
-      bytesUploaded?: number;
-      totalBytes?: number;
-      operation?: "initiate" | "chunk" | "finalize";
-    },
-  ) {
-    super(message);
-    this.name = "UploadError";
-  }
-}
+import { Data } from "effect";
+
+export class UploadError extends Data.TaggedError("UploadError")<{
+  message: string;
+  context?: {
+    fileName?: string;
+    uploadUrl?: string;
+    bytesUploaded?: number;
+    totalBytes?: number;
+    operation?: "initiate" | "chunk" | "finalize";
+  };
+}> {}

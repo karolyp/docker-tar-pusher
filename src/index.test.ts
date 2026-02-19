@@ -1,7 +1,8 @@
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
+import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { DockerTarPusher } from "./index";
+import { makeDockerTarPusherLayer, pushToRegistry } from "./index";
 
 const images = ["busybox", "alpine", "nginx"];
 const registryUrl = process.env.REGISTRY_URL || "http://localhost:15000";
@@ -21,12 +22,12 @@ afterAll(() => {
 
 describe("DockerTarPusher", () => {
   test.each(images)("should upload %s to registry", async (image) => {
-    const dtp = new DockerTarPusher({
-      tarball: `/tmp/${image}.tar.gz`,
-      registryUrl,
-    });
+    const options = { tarball: `/tmp/${image}.tar.gz`, registryUrl };
+    const layer = makeDockerTarPusherLayer(options);
 
-    await dtp.pushToRegistry();
+    await Effect.runPromise(
+      pushToRegistry(options).pipe(Effect.provide(layer)),
+    );
 
     const result = await fetch(`${registryUrl}/v2/_catalog`);
     const json = (await result.json()) as { repositories: string[] };

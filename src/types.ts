@@ -1,48 +1,72 @@
-import * as v from "valibot";
+import { Schema } from "effect";
 
-export const ManifestSchema = v.pipe(
-  v.object({
-    Config: v.string(),
-    RepoTags: v.array(v.string()),
-    Layers: v.array(v.string()),
+export const ManifestSchema = Schema.transform(
+  Schema.Struct({
+    Config: Schema.String,
+    RepoTags: Schema.Array(Schema.String),
+    Layers: Schema.Array(Schema.String),
   }),
-  v.transform(({ Config, RepoTags, Layers }) => ({
-    config: Config,
-    repoTags: RepoTags,
-    layers: Layers,
-  })),
+  Schema.Struct({
+    config: Schema.String,
+    repoTags: Schema.Array(Schema.String),
+    layers: Schema.Array(Schema.String),
+  }),
+  {
+    decode: ({ Config, RepoTags, Layers }) => ({
+      config: Config,
+      repoTags: RepoTags,
+      layers: Layers,
+    }),
+    encode: ({ config, repoTags, layers }) => ({
+      Config: config,
+      RepoTags: repoTags,
+      Layers: layers,
+    }),
+  },
 );
 
-export const AuthSchema = v.object({
-  username: v.string(),
-  password: v.string(),
+export const AuthSchema = Schema.Struct({
+  username: Schema.String,
+  password: Schema.String,
 });
 
-export const ImageSchema = v.object({
-  name: v.string(),
-  version: v.string(),
+export const ImageSchema = Schema.Struct({
+  name: Schema.String,
+  version: Schema.String,
 });
 
-export const ProgressCallbackSchema = v.function();
+const DockerTarPusherOptionsInput = Schema.Struct({
+  registryUrl: Schema.String,
+  tarball: Schema.String,
+  chunkSize: Schema.optional(Schema.Number),
+  sslVerify: Schema.optional(Schema.Boolean),
+  auth: Schema.optional(AuthSchema),
+  image: Schema.optional(ImageSchema),
+  onProgress: Schema.optional(Schema.Any),
+});
 
-export const DockerTarPusherOptionsSchema = v.pipe(
-  v.object({
-    registryUrl: v.string(),
-    tarball: v.string(),
-    chunkSize: v.optional(v.number()),
-    sslVerify: v.optional(v.boolean()),
-    auth: v.optional(AuthSchema),
-    image: v.optional(ImageSchema),
-    onProgress: v.optional(ProgressCallbackSchema),
+export const DockerTarPusherOptionsSchema = Schema.transform(
+  DockerTarPusherOptionsInput,
+  Schema.Struct({
+    registryUrl: Schema.String,
+    tarball: Schema.String,
+    chunkSize: Schema.Number,
+    sslVerify: Schema.Boolean,
+    auth: Schema.optional(AuthSchema),
+    image: Schema.optional(ImageSchema),
+    onProgress: Schema.optional(Schema.Any),
   }),
-  v.transform((input) => ({
-    ...input,
-    chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
-    sslVerify: input.sslVerify ?? true,
-  })),
+  {
+    decode: (input) => ({
+      ...input,
+      chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
+      sslVerify: input.sslVerify ?? true,
+    }),
+    encode: (output) => output,
+  },
 );
 
-export type Layer = {
+export type ImageLayer = {
   size: number;
   digest: string;
   mediaType: string;
@@ -58,7 +82,7 @@ export type RegistryManifest = {
   schemaVersion: number;
   mediaType: string;
   config: Config;
-  layers: Layer[];
+  layers: ImageLayer[];
 };
 
 export type Headers = {
@@ -83,7 +107,7 @@ export enum ContentTypes {
   APPLICATION_CONFIG = "application/vnd.docker.container.image.v1+json",
 }
 
-export type Auth = v.InferInput<typeof AuthSchema>;
-export type ApplicationConfiguration = v.InferOutput<
+export type Auth = Schema.Schema.Type<typeof AuthSchema>;
+export type ApplicationConfiguration = Schema.Schema.Type<
   typeof DockerTarPusherOptionsSchema
 >;
