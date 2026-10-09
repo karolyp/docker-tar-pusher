@@ -39,20 +39,41 @@ describe("manifest validation", () => {
   });
 });
 
+const failure = async (effect: Effect.Effect<unknown, unknown>) =>
+  JSON.stringify(await Effect.runPromiseExit(effect));
+
 describe("options validation", () => {
-  test("rejects a non-function onProgress", async () => {
-    const exit = await Effect.runPromiseExit(
+  test.each([0, -1, 1.5])("rejects chunkSize %s", async (chunkSize) => {
+    const exit = await failure(
       Effect.void.pipe(
-        Effect.provide(
-          makeDockerTarPusherLayer({
-            tarball: "x.tar",
-            registryUrl,
-            onProgress: true as never,
-          }),
-        ),
+        Effect.provide(makeDockerTarPusherLayer({ registryUrl, chunkSize })),
       ),
     );
 
-    expect(Exit.isFailure(exit)).toBe(true);
+    expect(exit).toContain("Fail");
+    expect(exit).not.toContain("Die");
+  });
+
+  test("pushToRegistry rejects a non-function onProgress as a failure", async () => {
+    const exit = await failure(
+      pushToRegistry({ tarball: "x.tar", onProgress: true as never }).pipe(
+        Effect.provide(makeDockerTarPusherLayer({ registryUrl })),
+      ),
+    );
+
+    expect(exit).toContain("Fail");
+    expect(exit).not.toContain("Die");
+  });
+
+  test("pushToRegistry rejects an incomplete image override", async () => {
+    const exit = await failure(
+      pushToRegistry({
+        tarball: "x.tar",
+        image: { name: undefined as never, version: "1" },
+      }).pipe(Effect.provide(makeDockerTarPusherLayer({ registryUrl }))),
+    );
+
+    expect(exit).toContain("Fail");
+    expect(exit).not.toContain("Die");
   });
 });

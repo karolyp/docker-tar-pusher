@@ -63,14 +63,14 @@ afterEach(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const buildTarball = async (repoTag = "localhost:5000/app:1.0") => {
+const buildTarball = async (repoTags = ["localhost:5000/app:1.0"]) => {
   const dir = mkdtempSync(join(tmpdir(), "dtp-registry-test-"));
   writeFileSync(join(dir, "config.json"), "0123456789");
   writeFileSync(join(dir, "layer.tar"), "abcdefghij");
   writeFileSync(
     join(dir, "manifest.json"),
     JSON.stringify([
-      { Config: "config.json", RepoTags: [repoTag], Layers: ["layer.tar"] },
+      { Config: "config.json", RepoTags: repoTags, Layers: ["layer.tar"] },
     ]),
   );
   const file = join(dir, "image.tar");
@@ -121,14 +121,55 @@ describe("successful push", () => {
       );
       expect(final.url.search).toContain("digest=sha256%3A");
     }
-    expect(manifest?.url.pathname).toBe("/v2/localhost:5000/app/manifests/1.0");
+    expect(manifest?.url.pathname).toBe("/v2/app/manifests/1.0");
     expect(manifest?.headers["content-type"]).toBe(
       "application/vnd.docker.distribution.manifest.v2+json",
     );
   });
 
+  test("strips the registry host from repo tags", async () => {
+    await push(await buildTarball(["registry.example.com/team/app:2.0"]));
+
+    const manifest = requests.find((r) =>
+      r.url.pathname.includes("/manifests/"),
+    );
+    expect(manifest?.url.pathname).toBe("/v2/team/app/manifests/2.0");
+  });
+
+  test("uploads blobs once per image and pushes every tag", async () => {
+    await push(await buildTarball(["app:1", "app:2", "other:1"]));
+
+    const manifests = requests
+      .filter((r) => r.url.pathname.includes("/manifests/"))
+      .map((r) => r.url.pathname);
+    const initiated = requests.filter((r) => r.method === "POST");
+
+    expect(manifests.sort()).toEqual([
+      "/v2/app/manifests/1",
+      "/v2/app/manifests/2",
+      "/v2/other/manifests/1",
+    ]);
+    expect(initiated).toHaveLength(4);
+  });
+
+  test("an image override pushes once and works without repo tags", async () => {
+    await push(await buildTarball(["a:1", "b:2"]), {
+      image: { name: "custom", version: "1" },
+    });
+    const empty = await buildTarball([]);
+    await push(empty, { image: { name: "custom", version: "2" } });
+
+    const manifests = requests
+      .filter((r) => r.url.pathname.includes("/manifests/"))
+      .map((r) => r.url.pathname);
+    expect(manifests).toEqual([
+      "/v2/custom/manifests/1",
+      "/v2/custom/manifests/2",
+    ]);
+  });
+
   test("tags untagged repo tags as latest", async () => {
-    await push(await buildTarball("app"));
+    await push(await buildTarball(["app"]));
 
     const manifest = requests.find((r) =>
       r.url.pathname.includes("/manifests/"),
@@ -172,13 +213,12 @@ describe("successful push", () => {
     await push(await buildTarball(), { onProgress: (e) => events.push(e) });
 
     expect(events.map((e) => e.type)).toEqual(["layer", "config", "manifest"]);
-    expect(events[2]?.item).toBe("localhost:5000/app:1.0");
+    expect(events[2]?.item).toBe("app:1.0");
   });
 
   test("follows redirects", async () => {
     override = ({ method, url }) =>
-      method === "POST" &&
-      url.pathname === "/v2/localhost:5000/app/blobs/uploads/"
+      method === "POST" && url.pathname === "/v2/app/blobs/uploads/"
         ? { status: 307, location: "/redirected/" }
         : method === "POST"
           ? { status: 202, location: "/upload/1" }
@@ -187,6 +227,23 @@ describe("successful push", () => {
     await push(await buildTarball());
 
     expect(requests.some((r) => r.url.pathname === "/redirected/")).toBe(true);
+  });
+});
+
+describe("chunk ranges", () => {
+  test("Content-Range end is inclusive", async () => {
+    await push(await buildTarball(["app:1"]));
+
+    const ranges = requests
+      .filter((r) => r.method === "PATCH")
+      .map((r) => r.headers["content-range"]);
+    expect(ranges).toContain("0-3");
+    expect(ranges).toContain("4-7");
+
+    const finals = requests.filter(
+      (r) => r.method === "PUT" && r.url.searchParams.has("digest"),
+    );
+    expect(finals.map((r) => r.headers["content-range"])).toContain("8-9");
   });
 });
 
@@ -239,6 +296,22 @@ describe("failures", () => {
       statusCode: 400,
       context: { operation: "push_manifest", tag: "1.0" },
     });
+  });
+
+  test("a tarball without repo tags and no image override fails", async () => {
+    const error = await fail(await buildTarball([]));
+
+    expect(error).toMatchObject({
+      _tag: "ManifestError",
+      context: { operation: "validate" },
+    });
+    expect(requests).toHaveLength(0);
+  });
+
+  test("ManifestError keeps the cause", async () => {
+    const error = await fail(join(tmpdir(), "does-not-exist.tar"));
+
+    expect((error as { cause: unknown }).cause).toBeDefined();
   });
 
   test("a missing tarball fails with ManifestError", async () => {

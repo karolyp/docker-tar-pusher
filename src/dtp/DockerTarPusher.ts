@@ -7,7 +7,7 @@ import {
   ContentTypes,
   DockerTarPusherOptionsSchema,
   ManifestSchema,
-  type ProgressCallback,
+  PushOptionsSchema,
   type RegistryManifest,
 } from "../types.js";
 import {
@@ -19,20 +19,26 @@ export type DockerTarPusherOptions = Schema.Codec.Encoded<
   typeof DockerTarPusherOptionsSchema
 >;
 
-export type PushOptions = {
-  tarball: string;
-  image?: { name: string; version: string };
-  onProgress?: ProgressCallback;
-};
+export type PushOptions = Schema.Codec.Encoded<typeof PushOptionsSchema>;
 
 const decodeManifest = Schema.decodeUnknownEffect(ManifestSchema);
 const decodeOptions = Schema.decodeUnknownEffect(DockerTarPusherOptionsSchema);
+const decodePushOptions = Schema.decodeUnknownEffect(PushOptionsSchema);
+
+const stripRegistryHost = (name: string) => {
+  const [first = "", ...rest] = name.split("/");
+  const isHost =
+    first.includes(".") || first.includes(":") || first === "localhost";
+  return rest.length > 0 && isHost ? rest.join("/") : name;
+};
 
 const splitRepoTag = (repoTag: string): [string, string] => {
   const separator = repoTag.lastIndexOf(":");
-  return separator > repoTag.lastIndexOf("/")
-    ? [repoTag.slice(0, separator), repoTag.slice(separator + 1)]
-    : [repoTag, "latest"];
+  const [name, tag] =
+    separator > repoTag.lastIndexOf("/")
+      ? [repoTag.slice(0, separator), repoTag.slice(separator + 1)]
+      : [repoTag, "latest"];
+  return [stripRegistryHost(name), tag];
 };
 
 const readManifest = (cwd: string) =>
@@ -46,9 +52,10 @@ const readManifest = (cwd: string) =>
     return yield* decodeManifest(parsedManifest);
   }).pipe(
     Effect.mapError(
-      () =>
+      (cause) =>
         new ManifestError({
           message: `Failed to read manifest from ${cwd}`,
+          cause,
           context: {
             manifestPath: join(cwd, "manifest.json"),
             operation: "parse",
@@ -57,8 +64,9 @@ const readManifest = (cwd: string) =>
     ),
   );
 
-export const pushToRegistry = (config: PushOptions) =>
+export const pushToRegistry = (options: PushOptions) =>
   Effect.gen(function* () {
+    const config = yield* decodePushOptions(options);
     const fs = yield* FileSystem.FileSystem;
     const registry = yield* RegistryService;
 
@@ -66,9 +74,10 @@ export const pushToRegistry = (config: PushOptions) =>
 
     yield* Effect.tryPromise({
       try: () => extract({ file: config.tarball, cwd: tempDir }),
-      catch: () =>
+      catch: (cause) =>
         new ManifestError({
           message: `Failed to extract tarball: ${config.tarball}`,
+          cause,
           context: { operation: "parse" },
         }),
     });
@@ -79,11 +88,21 @@ export const pushToRegistry = (config: PushOptions) =>
       layers,
     } = yield* readManifest(tempDir);
 
-    for (const repoTag of repoTags) {
-      const [image, tag] = config.image
-        ? [config.image.name, config.image.version]
-        : splitRepoTag(repoTag);
+    const targets = config.image
+      ? [[config.image.name, config.image.version] as const]
+      : repoTags.map(splitRepoTag);
+    if (targets.length === 0) {
+      return yield* new ManifestError({
+        message: `Tarball has no repo tags, pass an image name and version: ${config.tarball}`,
+        context: { operation: "validate" },
+      });
+    }
+    const tagsByImage = new Map<string, Set<string>>();
+    for (const [image, tag] of targets) {
+      tagsByImage.set(image, (tagsByImage.get(image) ?? new Set()).add(tag));
+    }
 
+    for (const [image, tags] of tagsByImage) {
       const layerResults = yield* Effect.all(
         layers.map((layer, index) =>
           Effect.gen(function* () {
@@ -116,17 +135,6 @@ export const pushToRegistry = (config: PushOptions) =>
 
       const configResult = yield* registry.upload(tempDir, image, dockerConfig);
 
-      yield* Effect.sync(() =>
-        config.onProgress?.({
-          type: "manifest",
-          current: 1,
-          total: 1,
-          bytesUploaded: 0,
-          totalBytes: 0,
-          item: `${image}:${tag}`,
-        }),
-      );
-
       const manifest: RegistryManifest = {
         config: {
           ...configResult,
@@ -139,7 +147,20 @@ export const pushToRegistry = (config: PushOptions) =>
         schemaVersion: 2,
         mediaType: ContentTypes.APPLICATION_MANIFEST,
       };
-      yield* registry.pushManifest(manifest, image, tag);
+
+      for (const tag of tags) {
+        yield* Effect.sync(() =>
+          config.onProgress?.({
+            type: "manifest",
+            current: 1,
+            total: 1,
+            bytesUploaded: 0,
+            totalBytes: 0,
+            item: `${image}:${tag}`,
+          }),
+        );
+        yield* registry.pushManifest(manifest, image, tag);
+      }
     }
   }).pipe(Effect.scoped);
 

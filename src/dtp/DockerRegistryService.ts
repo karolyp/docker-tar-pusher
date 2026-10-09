@@ -31,7 +31,7 @@ class RegistryConfig extends Context.Service<
 const getChunkUploadHeaders = (start: number, length: number): Headers => ({
   [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
   [RequestHeaders.CONTENT_LENGTH]: String(length),
-  [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`,
+  [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length - 1}`,
 });
 
 const extractStatusCode = (e: unknown): number | undefined =>
@@ -41,11 +41,10 @@ const extractStatusCode = (e: unknown): number | undefined =>
 
 const locationOf = (
   response: HttpClientResponse.HttpClientResponse,
-  registryUrl: string,
 ): Effect.Effect<string, Error> => {
   const location = response.headers["location"];
   return location
-    ? Effect.succeed(new URL(location, registryUrl).toString())
+    ? Effect.succeed(new URL(location, response.request.url).toString())
     : Effect.fail(new Error("Registry response is missing a Location header"));
 };
 
@@ -83,9 +82,7 @@ export class RegistryService extends Context.Service<
       ): Effect.Effect<string, RegistryError> => {
         const url = `${config.registryUrl}/v2/${image}/blobs/uploads/`;
         return client.post(url).pipe(
-          Effect.flatMap((response) =>
-            locationOf(response, config.registryUrl),
-          ),
+          Effect.flatMap((response) => locationOf(response)),
           Effect.mapError(
             (e) =>
               new RegistryError({
@@ -142,10 +139,7 @@ export class RegistryService extends Context.Service<
                     bytesUploaded = bytesRead;
                     return {
                       bytesRead,
-                      followUploadUrl: yield* locationOf(
-                        response,
-                        config.registryUrl,
-                      ),
+                      followUploadUrl: yield* locationOf(response),
                       lastChunk: chunk,
                       lastHeaders: headers,
                     };
@@ -162,10 +156,7 @@ export class RegistryService extends Context.Service<
           );
 
           const digest = `sha256:${sha256.digest("hex")}`;
-          const finalUrl = new URL(
-            finalState.followUploadUrl,
-            config.registryUrl,
-          );
+          const finalUrl = new URL(finalState.followUploadUrl);
           finalUrl.searchParams.set("digest", digest);
           const finalRequest = HttpClientRequest.put(finalUrl).pipe(
             HttpClientRequest.setHeaders(finalState.lastHeaders),

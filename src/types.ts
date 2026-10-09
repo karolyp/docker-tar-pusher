@@ -1,29 +1,15 @@
-import { Effect, Schema, SchemaTransformation } from "effect";
+import { Effect, Schema } from "effect";
 
 export const ManifestSchema = Schema.Struct({
-  Config: Schema.String,
-  RepoTags: Schema.Array(Schema.String),
-  Layers: Schema.Array(Schema.String),
+  config: Schema.String,
+  repoTags: Schema.Array(Schema.String),
+  layers: Schema.Array(Schema.String),
 }).pipe(
-  Schema.decodeTo(
-    Schema.Struct({
-      config: Schema.String,
-      repoTags: Schema.Array(Schema.String),
-      layers: Schema.Array(Schema.String),
-    }),
-    SchemaTransformation.transform({
-      decode: ({ Config, RepoTags, Layers }) => ({
-        config: Config,
-        repoTags: RepoTags,
-        layers: Layers,
-      }),
-      encode: ({ config, repoTags, layers }) => ({
-        Config: config,
-        RepoTags: repoTags,
-        Layers: layers,
-      }),
-    }),
-  ),
+  Schema.encodeKeys({
+    config: "Config",
+    repoTags: "RepoTags",
+    layers: "Layers",
+  }),
 );
 
 const AuthSchema = Schema.Struct({
@@ -53,14 +39,17 @@ const ProgressCallbackSchema = Schema.declare(
 
 export const DockerTarPusherOptionsSchema = Schema.Struct({
   registryUrl: Schema.String,
-  tarball: Schema.String,
-  chunkSize: Schema.Number.pipe(
+  chunkSize: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed(10 * 1024 * 1024)),
   ),
   sslVerify: Schema.Boolean.pipe(
     Schema.withDecodingDefaultKey(Effect.succeed(true)),
   ),
   auth: Schema.optional(AuthSchema),
+});
+
+export const PushOptionsSchema = Schema.Struct({
+  tarball: Schema.String,
   image: Schema.optional(ImageSchema),
   onProgress: Schema.optional(ProgressCallbackSchema),
 });

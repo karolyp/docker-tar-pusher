@@ -18,17 +18,17 @@ Create the layer from a configuration object, then run `pushToRegistry` with tha
 Layer options (`makeDockerTarPusherLayer`):
 
 - registryUrl: address of the registry
-- tarball: absolute path to tar file
-- chunkSize (optional): size of chunks, defaults to 10 MiB (10 \* 1024 \* 1024)
+- chunkSize (optional): size of chunks in bytes, a positive integer, defaults to 10 MiB (10 \* 1024 \* 1024)
 - sslVerify (optional): should reject invalid TLS certificates, defaults to true
 - auth (optional): HTTP Basic auth containing the username and password, defaults to empty
-- image (optional): image name and version, defaults to the repo tags found in the tarball
 
 Push options (`pushToRegistry`):
 
 - tarball: absolute path to tar file
-- image (optional): image name and version, defaults to the repo tags found in the tarball
+- image (optional): image name and version, defaults to the repo tags found in the tarball (a leading registry host such as `localhost:5000/` is stripped). Required if the tarball has no repo tags
 - onProgress (optional): callback invoked with a `ProgressEvent` for each layer, the config and the manifest
+
+Blobs are uploaded once per image name and the manifest is pushed for each tag.
 
 The temporary files created while extracting the tarball are removed when the effect finishes, even on failure or interruption.
 
