@@ -26,12 +26,12 @@ export const ManifestSchema = Schema.Struct({
   ),
 );
 
-export const AuthSchema = Schema.Struct({
+const AuthSchema = Schema.Struct({
   username: Schema.String,
   password: Schema.String,
 });
 
-export const ImageSchema = Schema.Struct({
+const ImageSchema = Schema.Struct({
   name: Schema.String,
   version: Schema.String,
 });

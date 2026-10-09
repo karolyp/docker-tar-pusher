@@ -27,8 +27,6 @@ class RegistryConfig extends Context.Service<
   DockerRegistryServiceConfig
 >()("RegistryConfig") {}
 
-// --- Helpers ---
-
 const getChunkUploadHeaders = (start: number, length: number): Headers => ({
   [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
   [RequestHeaders.CONTENT_LENGTH]: String(length),
@@ -46,8 +44,6 @@ type ChunkState = {
   lastChunk: Uint8Array;
   lastHeaders: Headers;
 };
-
-// --- Service ---
 
 export class RegistryService extends Context.Service<
   RegistryService,
@@ -145,7 +141,6 @@ export class RegistryService extends Context.Service<
             ),
           );
 
-          // finalize: PUT the last chunk with the computed digest
           const digest = `sha256:${sha256.digest("hex")}`;
           const finalRequest = HttpClientRequest.put(
             `${finalState.followUploadUrl}&digest=${digest}`,
@@ -206,8 +201,6 @@ export class RegistryService extends Context.Service<
     }),
   );
 }
-
-// --- Layer factory ---
 
 export const makeRegistryServiceLayer = (
   config: DockerRegistryServiceConfig,
