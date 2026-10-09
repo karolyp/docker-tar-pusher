@@ -1,137 +1,264 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { type AxiosInstance, isAxiosError } from "axios";
-import { createInstance } from "../config/axios";
-import RegistryError from "../errors/RegistryError";
-import UploadError from "../errors/UploadError";
-import type { Auth, ChunkMetaData, Headers, RegistryManifest } from "../types";
-import { ContentTypes, RequestHeaders } from "../types";
+import { NodeFileSystem, NodeHttpClient } from "@effect/platform-node";
+import { Context, Effect, FileSystem, Layer, Stream } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { RegistryError } from "../errors/RegistryError.js";
+import { UploadError } from "../errors/UploadError.js";
+import type {
+  Auth,
+  ChunkMetaData,
+  Headers,
+  RegistryManifest,
+} from "../types.js";
+import { ContentTypes, RequestHeaders } from "../types.js";
 
-type DockerRegistryServiceConfig = {
+export type DockerRegistryServiceConfig = {
   chunkSize: number;
   registryUrl: string;
   sslVerify: boolean;
   auth?: Auth;
 };
 
-export default class DockerRegistryService {
-  private readonly axios: AxiosInstance;
+class RegistryConfig extends Context.Service<
+  RegistryConfig,
+  DockerRegistryServiceConfig
+>()("RegistryConfig") {}
 
-  constructor(private readonly config: DockerRegistryServiceConfig) {
-    this.axios = createInstance({
-      chunkSize: this.config.chunkSize,
-      sslVerify: this.config.sslVerify,
-      auth: this.config.auth,
-    });
+const getChunkUploadHeaders = (start: number, length: number): Headers => ({
+  [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
+  [RequestHeaders.CONTENT_LENGTH]: String(length),
+  [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length - 1}`,
+});
+
+const extractStatusCode = (e: unknown): number | undefined =>
+  HttpClientError.isHttpClientError(e) && e.reason._tag === "StatusCodeError"
+    ? e.reason.response.status
+    : undefined;
+
+const locationOf = (
+  response: HttpClientResponse.HttpClientResponse,
+): Effect.Effect<string, Error> => {
+  const location = response.headers["location"];
+  return location
+    ? Effect.succeed(new URL(location, response.request.url).toString())
+    : Effect.fail(new Error("Registry response is missing a Location header"));
+};
+
+type ChunkState = {
+  bytesRead: number;
+  followUploadUrl: string;
+  lastChunk: Uint8Array;
+  lastHeaders: Headers;
+};
+
+export class RegistryService extends Context.Service<
+  RegistryService,
+  {
+    readonly upload: (
+      cwd: string,
+      image: string,
+      file: string,
+    ) => Effect.Effect<ChunkMetaData, RegistryError | UploadError>;
+    readonly pushManifest: (
+      manifest: RegistryManifest,
+      image: string,
+      tag: string,
+    ) => Effect.Effect<void, RegistryError>;
   }
+>()("DockerRegistryService") {
+  static readonly layer = Layer.effect(
+    RegistryService,
+    Effect.gen(function* () {
+      const config = yield* RegistryConfig;
+      const client = yield* HttpClient.HttpClient;
+      const fs = yield* FileSystem.FileSystem;
 
-  public async upload(cwd: string, image: string, file: string) {
-    const uploadUrl = await this.initiateUpload(image);
-
-    return await this.pushFileInChunks(cwd, uploadUrl, file);
-  }
-
-  public async pushManifest(
-    manifest: RegistryManifest,
-    image: string,
-    tag: string,
-  ): Promise<void> {
-    const url = `${this.config.registryUrl}/v2/${image}/manifests/${tag}`;
-    try {
-      await this.axios.put(url, manifest, {
-        headers: {
-          [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_MANIFEST,
-        },
-      });
-    } catch (e) {
-      const statusCode = isAxiosError(e) ? e.response?.status : undefined;
-      throw new RegistryError(
-        `Failed to push manifest for ${image}:${tag}`,
-        statusCode,
-        {
-          url,
-          image,
-          tag,
-          operation: "push_manifest",
-        },
-      );
-    }
-  }
-
-  private async pushFileInChunks(
-    cwd: string,
-    uploadUrl: string,
-    file: string,
-  ): Promise<ChunkMetaData> {
-    const sha256 = createHash("sha256");
-    let bytesRead = 0;
-    let followUploadUrl = uploadUrl;
-    let chunk: Buffer = Buffer.alloc(0);
-    let headers: Headers = {};
-
-    const { size: fileSize } = await stat(join(cwd, file));
-
-    try {
-      const readStream = createReadStream(join(cwd, file), {
-        highWaterMark: this.config.chunkSize,
-      });
-      for await (chunk of readStream) {
-        headers = this.getChunkUploadHeaders(bytesRead, chunk.length);
-        bytesRead += chunk.length;
-        sha256.update(chunk);
-        if (bytesRead < fileSize) {
-          const { headers: responseHeaders } = await this.axios.patch(
-            followUploadUrl,
-            chunk,
-            { headers },
-          );
-          followUploadUrl = responseHeaders.location || ""; // FIXME: quickfix for axios' breaking API change
-        }
-      }
-      // last chunk
-      const digest = `sha256:${sha256.digest("hex")}`;
-      await this.axios.put(`${followUploadUrl}&digest=${digest}`, chunk, {
-        headers,
-      });
-      return {
-        digest,
-        size: bytesRead,
+      const initiateUpload = (
+        image: string,
+      ): Effect.Effect<string, RegistryError> => {
+        const url = `${config.registryUrl}/v2/${image}/blobs/uploads/`;
+        return client.post(url).pipe(
+          Effect.flatMap((response) => locationOf(response)),
+          Effect.mapError(
+            (e) =>
+              new RegistryError({
+                message: `Failed to initiate upload for image: ${image}`,
+                cause: e,
+                statusCode: extractStatusCode(e),
+                context: { url, image, operation: "initiate_upload" },
+              }),
+          ),
+        );
       };
-    } catch {
-      throw new UploadError(`Failed to upload file: ${file}`, {
-        fileName: file,
-        uploadUrl,
-        bytesUploaded: bytesRead,
-        totalBytes: fileSize,
-        operation: "chunk",
-      });
-    }
-  }
 
-  private async initiateUpload(image: string): Promise<string> {
-    const startUploadUrl = `${this.config.registryUrl}/v2/${image}/blobs/uploads/`;
-    try {
-      const { headers } = await this.axios.post(startUploadUrl);
-      return headers.location || ""; // FIXME: quickfix for axios' breaking API change
-    } catch (e) {
-      const statusCode = isAxiosError(e) ? e.response?.status : undefined;
-      throw new RegistryError(
-        `Failed to initiate upload for image: ${image}`,
-        statusCode,
-        {
-          url: startUploadUrl,
-          image,
-          operation: "initiate_upload",
-        },
-      );
-    }
-  }
+      const pushFileInChunks = (
+        cwd: string,
+        uploadUrl: string,
+        file: string,
+      ): Effect.Effect<ChunkMetaData, UploadError> => {
+        const filePath = join(cwd, file);
+        let bytesUploaded = 0;
+        let totalBytes: number | undefined;
+        return Effect.gen(function* () {
+          const sha256 = createHash("sha256");
+          const fileSize = Number((yield* fs.stat(filePath)).size);
+          totalBytes = fileSize;
+          const fileStream = fs.stream(filePath, {
+            chunkSize: config.chunkSize,
+          });
 
-  private getChunkUploadHeaders = (start: number, length: number): Headers => ({
-    [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
-    [RequestHeaders.CONTENT_LENGTH]: String(length),
-    [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`,
-  });
+          const finalState = yield* fileStream.pipe(
+            Stream.runFoldEffect(
+              (): ChunkState => ({
+                bytesRead: 0,
+                followUploadUrl: uploadUrl,
+                lastChunk: new Uint8Array(0),
+                lastHeaders: {} as Headers,
+              }),
+              (state, chunk) =>
+                Effect.gen(function* () {
+                  const headers = getChunkUploadHeaders(
+                    state.bytesRead,
+                    chunk.length,
+                  );
+                  const bytesRead = state.bytesRead + chunk.length;
+                  sha256.update(chunk);
+
+                  if (bytesRead < fileSize) {
+                    const request = HttpClientRequest.patch(
+                      state.followUploadUrl,
+                    ).pipe(
+                      HttpClientRequest.setHeaders(headers),
+                      HttpClientRequest.bodyUint8Array(chunk),
+                    );
+                    const response = yield* client.execute(request);
+                    bytesUploaded = bytesRead;
+                    return {
+                      bytesRead,
+                      followUploadUrl: yield* locationOf(response),
+                      lastChunk: chunk,
+                      lastHeaders: headers,
+                    };
+                  }
+
+                  return {
+                    bytesRead,
+                    followUploadUrl: state.followUploadUrl,
+                    lastChunk: chunk,
+                    lastHeaders: headers,
+                  };
+                }),
+            ),
+          );
+
+          const digest = `sha256:${sha256.digest("hex")}`;
+          const finalUrl = new URL(finalState.followUploadUrl);
+          finalUrl.searchParams.set("digest", digest);
+          const finalRequest = HttpClientRequest.put(finalUrl).pipe(
+            HttpClientRequest.setHeaders(finalState.lastHeaders),
+            HttpClientRequest.bodyUint8Array(finalState.lastChunk),
+          );
+          yield* client.execute(finalRequest);
+
+          return { digest, size: finalState.bytesRead };
+        }).pipe(
+          Effect.mapError(
+            (e) =>
+              new UploadError({
+                message: `Failed to upload file: ${file}`,
+                cause: e,
+                statusCode: extractStatusCode(e),
+                context: {
+                  fileName: file,
+                  uploadUrl,
+                  bytesUploaded,
+                  totalBytes,
+                  operation: "chunk",
+                },
+              }),
+          ),
+        );
+      };
+
+      const upload = (
+        cwd: string,
+        image: string,
+        file: string,
+      ): Effect.Effect<ChunkMetaData, RegistryError | UploadError> =>
+        Effect.gen(function* () {
+          const uploadUrl = yield* initiateUpload(image);
+          return yield* pushFileInChunks(cwd, uploadUrl, file);
+        });
+
+      const pushManifest = (
+        manifest: RegistryManifest,
+        image: string,
+        tag: string,
+      ): Effect.Effect<void, RegistryError> => {
+        const url = `${config.registryUrl}/v2/${image}/manifests/${tag}`;
+        const request = HttpClientRequest.put(url).pipe(
+          HttpClientRequest.bodyText(
+            JSON.stringify(manifest),
+            ContentTypes.APPLICATION_MANIFEST,
+          ),
+        );
+        return client.execute(request).pipe(
+          Effect.asVoid,
+          Effect.mapError(
+            (e) =>
+              new RegistryError({
+                message: `Failed to push manifest for ${image}:${tag}`,
+                cause: e,
+                statusCode: extractStatusCode(e),
+                context: { url, image, tag, operation: "push_manifest" },
+              }),
+          ),
+        );
+      };
+
+      return RegistryService.of({ upload, pushManifest });
+    }),
+  );
 }
+
+export const makeRegistryServiceLayer = (
+  config: DockerRegistryServiceConfig,
+): Layer.Layer<RegistryService> => {
+  const configLayer = Layer.succeed(RegistryConfig, config);
+
+  const agentLayer = NodeHttpClient.layerAgentOptions({
+    rejectUnauthorized: config.sslVerify,
+    requestCert: true,
+  });
+
+  const baseHttpLayer = NodeHttpClient.layerNodeHttpNoAgent.pipe(
+    Layer.provide(agentLayer),
+  );
+
+  const httpLayer = Layer.effect(
+    HttpClient.HttpClient,
+    Effect.gen(function* () {
+      const baseClient = yield* HttpClient.HttpClient;
+      const { auth } = config;
+      const client = auth
+        ? baseClient.pipe(
+            HttpClient.mapRequest(
+              HttpClientRequest.basicAuth(auth.username, auth.password),
+            ),
+          )
+        : baseClient;
+      return client.pipe(
+        HttpClient.followRedirects(),
+        HttpClient.filterStatusOk,
+      );
+    }),
+  ).pipe(Layer.provide(baseHttpLayer));
+
+  return RegistryService.layer.pipe(
+    Layer.provide(Layer.mergeAll(httpLayer, NodeFileSystem.layer, configLayer)),
+  );
+};

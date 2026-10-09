@@ -1,48 +1,60 @@
-import * as v from "valibot";
+import { Effect, Schema } from "effect";
 
-export const ManifestSchema = v.pipe(
-  v.object({
-    Config: v.string(),
-    RepoTags: v.array(v.string()),
-    Layers: v.array(v.string()),
+export const ManifestSchema = Schema.Struct({
+  config: Schema.String,
+  repoTags: Schema.Array(Schema.String),
+  layers: Schema.Array(Schema.String),
+}).pipe(
+  Schema.encodeKeys({
+    config: "Config",
+    repoTags: "RepoTags",
+    layers: "Layers",
   }),
-  v.transform(({ Config, RepoTags, Layers }) => ({
-    config: Config,
-    repoTags: RepoTags,
-    layers: Layers,
-  })),
 );
 
-export const AuthSchema = v.object({
-  username: v.string(),
-  password: v.string(),
+const AuthSchema = Schema.Struct({
+  username: Schema.String,
+  password: Schema.String,
 });
 
-export const ImageSchema = v.object({
-  name: v.string(),
-  version: v.string(),
+const ImageSchema = Schema.Struct({
+  name: Schema.String,
+  version: Schema.String,
 });
 
-export const ProgressCallbackSchema = v.function();
+export type ProgressEvent = {
+  type: "layer" | "config" | "manifest";
+  current: number;
+  total: number;
+  bytesUploaded: number;
+  totalBytes: number;
+  item: string;
+};
 
-export const DockerTarPusherOptionsSchema = v.pipe(
-  v.object({
-    registryUrl: v.string(),
-    tarball: v.string(),
-    chunkSize: v.optional(v.number()),
-    sslVerify: v.optional(v.boolean()),
-    auth: v.optional(AuthSchema),
-    image: v.optional(ImageSchema),
-    onProgress: v.optional(ProgressCallbackSchema),
-  }),
-  v.transform((input) => ({
-    ...input,
-    chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
-    sslVerify: input.sslVerify ?? true,
-  })),
+export type ProgressCallback = (event: ProgressEvent) => void;
+
+const ProgressCallbackSchema = Schema.declare(
+  (u): u is ProgressCallback => typeof u === "function",
 );
 
-export type Layer = {
+export const DockerTarPusherOptionsSchema = Schema.Struct({
+  registryUrl: Schema.String,
+  chunkSize: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(10 * 1024 * 1024)),
+  ),
+  sslVerify: Schema.Boolean.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
+  auth: Schema.optional(AuthSchema),
+});
+
+export const PushOptionsSchema = Schema.Struct({
+  tarball: Schema.String,
+  image: Schema.optional(ImageSchema),
+  onProgress: Schema.optional(ProgressCallbackSchema),
+});
+
+export type ImageLayer = {
   size: number;
   digest: string;
   mediaType: string;
@@ -58,7 +70,7 @@ export type RegistryManifest = {
   schemaVersion: number;
   mediaType: string;
   config: Config;
-  layers: Layer[];
+  layers: ImageLayer[];
 };
 
 export type Headers = {
@@ -83,7 +95,7 @@ export enum ContentTypes {
   APPLICATION_CONFIG = "application/vnd.docker.container.image.v1+json",
 }
 
-export type Auth = v.InferInput<typeof AuthSchema>;
-export type ApplicationConfiguration = v.InferOutput<
+export type Auth = Schema.Schema.Type<typeof AuthSchema>;
+export type ApplicationConfiguration = Schema.Schema.Type<
   typeof DockerTarPusherOptionsSchema
 >;

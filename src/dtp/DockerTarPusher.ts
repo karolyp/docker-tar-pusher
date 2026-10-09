@@ -1,106 +1,182 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { NodeFileSystem } from "@effect/platform-node";
+import { Effect, FileSystem, Layer, Schema } from "effect";
 import { extract } from "tar";
-import * as v from "valibot";
-import ManifestError from "../errors/ManifestError";
+import { ManifestError } from "../errors/ManifestError.js";
 import {
-  type ApplicationConfiguration,
-  type ChunkMetaData,
+  ContentTypes,
   DockerTarPusherOptionsSchema,
   ManifestSchema,
-} from "../types";
-import DockerRegistryService from "./DockerRegistryService";
-import { buildManifest } from "./ManifestBuilder";
+  PushOptionsSchema,
+  type RegistryManifest,
+} from "../types.js";
+import {
+  makeRegistryServiceLayer,
+  RegistryService,
+} from "./DockerRegistryService.js";
 
-export type DockerTarPusherOptions = v.InferInput<
+export type DockerTarPusherOptions = Schema.Codec.Encoded<
   typeof DockerTarPusherOptionsSchema
 >;
 
-export default class DockerTarPusher {
-  private readonly config: ApplicationConfiguration;
-  private readonly dockerRegistryService: DockerRegistryService;
+export type PushOptions = Schema.Codec.Encoded<typeof PushOptionsSchema>;
 
-  constructor(options: DockerTarPusherOptions) {
-    this.config = v.parse(DockerTarPusherOptionsSchema, options);
+const decodeManifest = Schema.decodeUnknownEffect(ManifestSchema);
+const decodeOptions = Schema.decodeUnknownEffect(DockerTarPusherOptionsSchema);
+const decodePushOptions = Schema.decodeUnknownEffect(PushOptionsSchema);
 
-    this.dockerRegistryService = new DockerRegistryService({
-      chunkSize: this.config.chunkSize,
-      registryUrl: this.config.registryUrl,
-      sslVerify: this.config.sslVerify,
-      auth: this.config.auth,
+const stripRegistryHost = (name: string) => {
+  const [first = "", ...rest] = name.split("/");
+  const isHost =
+    first.includes(".") || first.includes(":") || first === "localhost";
+  return rest.length > 0 && isHost ? rest.join("/") : name;
+};
+
+const splitRepoTag = (repoTag: string): [string, string] => {
+  const separator = repoTag.lastIndexOf(":");
+  const [name, tag] =
+    separator > repoTag.lastIndexOf("/")
+      ? [repoTag.slice(0, separator), repoTag.slice(separator + 1)]
+      : [repoTag, "latest"];
+  return [stripRegistryHost(name), tag];
+};
+
+const readManifest = (cwd: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const manifestPath = join(cwd, "manifest.json");
+    const rawManifest = yield* fs.readFileString(manifestPath);
+    const parsedManifest = yield* Effect.try(
+      () => (JSON.parse(rawManifest) as unknown[])[0],
+    );
+    return yield* decodeManifest(parsedManifest);
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ManifestError({
+          message: `Failed to read manifest from ${cwd}`,
+          cause,
+          context: {
+            manifestPath: join(cwd, "manifest.json"),
+            operation: "parse",
+          },
+        }),
+    ),
+  );
+
+export const pushToRegistry = (options: PushOptions) =>
+  Effect.gen(function* () {
+    const config = yield* decodePushOptions(options);
+    const fs = yield* FileSystem.FileSystem;
+    const registry = yield* RegistryService;
+
+    const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "dtp-" });
+
+    yield* Effect.tryPromise({
+      try: () => extract({ file: config.tarball, cwd: tempDir }),
+      catch: (cause) =>
+        new ManifestError({
+          message: `Failed to extract tarball: ${config.tarball}`,
+          cause,
+          context: { operation: "parse" },
+        }),
     });
-  }
 
-  async pushToRegistry() {
-    const tempDir = await mkdtemp(join(tmpdir(), "dtp-"));
-    try {
-      await extract({ file: this.config.tarball, cwd: tempDir });
+    const {
+      repoTags,
+      config: dockerConfig,
+      layers,
+    } = yield* readManifest(tempDir);
 
-      const { repoTags, config, layers } = await this.readManifest(tempDir);
+    const targets = config.image
+      ? [[config.image.name, config.image.version] as const]
+      : repoTags.map(splitRepoTag);
+    if (targets.length === 0) {
+      return yield* new ManifestError({
+        message: `Tarball has no repo tags, pass an image name and version: ${config.tarball}`,
+        context: { operation: "validate" },
+      });
+    }
+    const tagsByImage = new Map<string, Set<string>>();
+    for (const [image, tag] of targets) {
+      tagsByImage.set(image, (tagsByImage.get(image) ?? new Set()).add(tag));
+    }
 
-      for (const repoTag of repoTags) {
-        const [image, tag] = this.config.image
-          ? [this.config.image.name, this.config.image.version]
-          : repoTag.split(":");
-
-        const layerResults = await Promise.all(
-          layers.map((layer, index) => {
-            this.config.onProgress?.({
-              type: "layer",
-              current: index + 1,
-              total: layers.length,
-              bytesUploaded: 0,
-              totalBytes: 0,
-              item: layer,
-            });
-            return this.dockerRegistryService.upload(tempDir, image, layer);
+    for (const [image, tags] of tagsByImage) {
+      const layerResults = yield* Effect.all(
+        layers.map((layer, index) =>
+          Effect.gen(function* () {
+            yield* Effect.sync(() =>
+              config.onProgress?.({
+                type: "layer",
+                current: index + 1,
+                total: layers.length,
+                bytesUploaded: 0,
+                totalBytes: 0,
+                item: layer,
+              }),
+            );
+            return yield* registry.upload(tempDir, image, layer);
           }),
-        );
+        ),
+        { concurrency: "unbounded" },
+      );
 
-        this.config.onProgress?.({
+      yield* Effect.sync(() =>
+        config.onProgress?.({
           type: "config",
           current: 1,
           total: 1,
           bytesUploaded: 0,
           totalBytes: 0,
-          item: config,
-        });
+          item: dockerConfig,
+        }),
+      );
 
-        const configResult = await this.dockerRegistryService.upload(
-          tempDir,
-          image,
-          config,
+      const configResult = yield* registry.upload(tempDir, image, dockerConfig);
+
+      const manifest: RegistryManifest = {
+        config: {
+          ...configResult,
+          mediaType: ContentTypes.APPLICATION_CONFIG,
+        },
+        layers: layerResults.map((layer) => ({
+          ...layer,
+          mediaType: ContentTypes.APPLICATION_LAYER,
+        })),
+        schemaVersion: 2,
+        mediaType: ContentTypes.APPLICATION_MANIFEST,
+      };
+
+      for (const tag of tags) {
+        yield* Effect.sync(() =>
+          config.onProgress?.({
+            type: "manifest",
+            current: 1,
+            total: 1,
+            bytesUploaded: 0,
+            totalBytes: 0,
+            item: `${image}:${tag}`,
+          }),
         );
-
-        this.config.onProgress?.({
-          type: "manifest",
-          current: 1,
-          total: 1,
-          bytesUploaded: 0,
-          totalBytes: 0,
-          item: `${image}:${tag}`,
-        });
-
-        const manifest = buildManifest(layerResults, configResult);
-        await this.dockerRegistryService.pushManifest(manifest, image, tag);
+        yield* registry.pushManifest(manifest, image, tag);
       }
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
     }
-  }
+  }).pipe(Effect.scoped);
 
-  private async readManifest(cwd: string) {
-    try {
-      const rawManifest = await readFile(join(cwd, "manifest.json"), "utf8");
-      const parsedManifest = JSON.parse(rawManifest)[0];
-
-      return v.parse(ManifestSchema, parsedManifest);
-    } catch {
-      throw new ManifestError(`Failed to read manifest from ${cwd}`, {
-        manifestPath: join(cwd, "manifest.json"),
-        operation: "parse",
-      });
-    }
-  }
-}
+export const makeDockerTarPusherLayer = (options: DockerTarPusherOptions) =>
+  Layer.unwrap(
+    decodeOptions(options).pipe(
+      Effect.map((config) =>
+        Layer.merge(
+          makeRegistryServiceLayer({
+            chunkSize: config.chunkSize,
+            registryUrl: config.registryUrl,
+            sslVerify: config.sslVerify,
+            auth: config.auth,
+          }),
+          NodeFileSystem.layer,
+        ),
+      ),
+    ),
+  );
