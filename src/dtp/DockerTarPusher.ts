@@ -3,13 +3,17 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Schema } from "effect";
 import { extract } from "tar";
 import { ManifestError } from "../errors/ManifestError.js";
-import { DockerTarPusherOptionsSchema, ManifestSchema } from "../types.js";
+import {
+  ContentTypes,
+  DockerTarPusherOptionsSchema,
+  ManifestSchema,
+  type RegistryManifest,
+} from "../types.js";
 import {
   type DockerRegistryServiceConfig,
   makeRegistryServiceLayer,
   RegistryService,
 } from "./DockerRegistryService.js";
-import { buildManifest } from "./ManifestBuilder.js";
 
 export type DockerTarPusherOptions = Schema.Codec.Encoded<
   typeof DockerTarPusherOptionsSchema
@@ -110,7 +114,18 @@ export const pushToRegistry = (options: DockerTarPusherOptions) => {
         }),
       );
 
-      const manifest = buildManifest(layerResults, configResult);
+      const manifest: RegistryManifest = {
+        config: {
+          ...configResult,
+          mediaType: ContentTypes.APPLICATION_CONFIG,
+        },
+        layers: layerResults.map((layer) => ({
+          ...layer,
+          mediaType: ContentTypes.APPLICATION_LAYER,
+        })),
+        schemaVersion: 2,
+        mediaType: ContentTypes.APPLICATION_MANIFEST,
+      };
       yield* registry.pushManifest(manifest, image, tag);
     }
   }).pipe(Effect.scoped);

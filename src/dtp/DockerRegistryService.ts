@@ -99,13 +99,12 @@ export class RegistryService extends Context.Service<
 
           const finalState = yield* fileStream.pipe(
             Stream.runFoldEffect(
-              () =>
-                ({
-                  bytesRead: 0,
-                  followUploadUrl: uploadUrl,
-                  lastChunk: new Uint8Array(0),
-                  lastHeaders: {} as Headers,
-                }) satisfies ChunkState,
+              (): ChunkState => ({
+                bytesRead: 0,
+                followUploadUrl: uploadUrl,
+                lastChunk: new Uint8Array(0),
+                lastHeaders: {} as Headers,
+              }),
               (state, chunk) =>
                 Effect.gen(function* () {
                   const headers = getChunkUploadHeaders(

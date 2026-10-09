@@ -8,7 +8,6 @@ export {
   makeDockerTarPusherLayer,
   pushToRegistry,
 } from "./dtp/DockerTarPusher.js";
-export { buildManifest } from "./dtp/ManifestBuilder.js";
 export { ManifestError } from "./errors/ManifestError.js";
 export { RegistryError } from "./errors/RegistryError.js";
 export { UploadError } from "./errors/UploadError.js";
