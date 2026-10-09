@@ -30,6 +30,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.5.0
         version: 19.5.0
+      '@total-typescript/tsconfig':
+        specifier: ^1.0.4
+        version: 1.0.4
       '@types/node':
         specifier: ^18.11.0
         version: 18.19.64
@@ -600,6 +603,9 @@ packages:
     resolution: {integrity: sha512-/RqrIFtLB926frMhZD0a5oDa4eFIbyNEwLLloMTEjmqfwZWXywwVVOVmwTsuyhC9HKkVEZcOOi+KV4U9wmOdlg==}
     cpu: [x64]
     os: [win32]
+
+  '@total-typescript/tsconfig@1.0.4':
+    resolution: {integrity: sha512-fO4ctMPGz1kOFOQ4RCPBRBfMy3gDn+pegUfrGyUFRMv/Rd0ZM3/SHH3hFCYG4u6bPLG8OlmOGcBLDexvyr3A5w==}
 
   '@types/conventional-commits-parser@5.0.0':
     resolution: {integrity: sha512-loB369iXNmAZglwWATL+WRe+CRMmmBPtpolYzIebFaX4YA3x+BEfLqhUAV9WanycKI3TG1IMr5bMJDajDKLlUQ==}
@@ -2129,6 +2135,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.25.0':
     optional: true
+
+  '@total-typescript/tsconfig@1.0.4': {}
 
   '@types/conventional-commits-parser@5.0.0':
     dependencies:

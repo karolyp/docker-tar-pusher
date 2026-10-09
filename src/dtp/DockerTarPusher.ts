@@ -63,7 +63,7 @@ export const pushToRegistry = (options: DockerTarPusherOptions) => {
     } = yield* readManifest(tempDir);
 
     for (const repoTag of repoTags) {
-      const [image, tag] = config.image
+      const [image = repoTag, tag = "latest"] = config.image
         ? [config.image.name, config.image.version]
         : repoTag.split(":");
 

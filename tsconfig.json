@@ -1,14 +1,8 @@
 {
+  "extends": "@total-typescript/tsconfig/tsc/no-dom/library",
   "compilerOptions": {
-    "declaration": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "module": "nodenext",
     "outDir": "build",
     "rootDir": "src",
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "es2022",
     "types": ["vitest/globals"]
   },
   "exclude": ["src/**/*.test.ts"],
