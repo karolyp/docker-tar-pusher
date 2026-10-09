@@ -36,6 +36,21 @@ const ImageSchema = Schema.Struct({
   version: Schema.String,
 });
 
+export type ProgressEvent = {
+  type: "layer" | "config" | "manifest";
+  current: number;
+  total: number;
+  bytesUploaded: number;
+  totalBytes: number;
+  item: string;
+};
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
+const ProgressCallbackSchema = Schema.declare(
+  (u): u is ProgressCallback => typeof u === "function",
+);
+
 export const DockerTarPusherOptionsSchema = Schema.Struct({
   registryUrl: Schema.String,
   tarball: Schema.String,
@@ -47,7 +62,7 @@ export const DockerTarPusherOptionsSchema = Schema.Struct({
   ),
   auth: Schema.optional(AuthSchema),
   image: Schema.optional(ImageSchema),
-  onProgress: Schema.optional(Schema.Any),
+  onProgress: Schema.optional(ProgressCallbackSchema),
 });
 
 export type ImageLayer = {

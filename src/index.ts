@@ -6,6 +6,7 @@ export {
 export {
   type DockerTarPusherOptions,
   makeDockerTarPusherLayer,
+  type PushOptions,
   pushToRegistry,
 } from "./dtp/DockerTarPusher.js";
 export { ManifestError } from "./errors/ManifestError.js";
@@ -17,5 +18,7 @@ export type {
   ChunkMetaData,
   Config,
   ImageLayer,
+  ProgressCallback,
+  ProgressEvent,
   RegistryManifest,
 } from "./types.js";

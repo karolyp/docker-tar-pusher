@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { NodeFileSystem, NodeHttpClient } from "@effect/platform-node";
 import { Context, Effect, FileSystem, Layer, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
-import type * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { RegistryError } from "../errors/RegistryError.js";
 import { UploadError } from "../errors/UploadError.js";
 import type {
@@ -33,10 +34,20 @@ const getChunkUploadHeaders = (start: number, length: number): Headers => ({
   [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`,
 });
 
-const extractStatusCode = (
-  e: HttpClientError.HttpClientError,
-): number | undefined =>
-  e.reason._tag === "StatusCodeError" ? e.reason.response.status : undefined;
+const extractStatusCode = (e: unknown): number | undefined =>
+  HttpClientError.isHttpClientError(e) && e.reason._tag === "StatusCodeError"
+    ? e.reason.response.status
+    : undefined;
+
+const locationOf = (
+  response: HttpClientResponse.HttpClientResponse,
+  registryUrl: string,
+): Effect.Effect<string, Error> => {
+  const location = response.headers["location"];
+  return location
+    ? Effect.succeed(new URL(location, registryUrl).toString())
+    : Effect.fail(new Error("Registry response is missing a Location header"));
+};
 
 type ChunkState = {
   bytesRead: number;
@@ -72,11 +83,14 @@ export class RegistryService extends Context.Service<
       ): Effect.Effect<string, RegistryError> => {
         const url = `${config.registryUrl}/v2/${image}/blobs/uploads/`;
         return client.post(url).pipe(
-          Effect.map((response) => response.headers["location"] ?? ""),
+          Effect.flatMap((response) =>
+            locationOf(response, config.registryUrl),
+          ),
           Effect.mapError(
             (e) =>
               new RegistryError({
                 message: `Failed to initiate upload for image: ${image}`,
+                cause: e,
                 statusCode: extractStatusCode(e),
                 context: { url, image, operation: "initiate_upload" },
               }),
@@ -90,9 +104,12 @@ export class RegistryService extends Context.Service<
         file: string,
       ): Effect.Effect<ChunkMetaData, UploadError> => {
         const filePath = join(cwd, file);
+        let bytesUploaded = 0;
+        let totalBytes: number | undefined;
         return Effect.gen(function* () {
           const sha256 = createHash("sha256");
           const fileSize = Number((yield* fs.stat(filePath)).size);
+          totalBytes = fileSize;
           const fileStream = fs.stream(filePath, {
             chunkSize: config.chunkSize,
           });
@@ -122,9 +139,13 @@ export class RegistryService extends Context.Service<
                       HttpClientRequest.bodyUint8Array(chunk),
                     );
                     const response = yield* client.execute(request);
+                    bytesUploaded = bytesRead;
                     return {
                       bytesRead,
-                      followUploadUrl: response.headers["location"] ?? "",
+                      followUploadUrl: yield* locationOf(
+                        response,
+                        config.registryUrl,
+                      ),
                       lastChunk: chunk,
                       lastHeaders: headers,
                     };
@@ -141,9 +162,12 @@ export class RegistryService extends Context.Service<
           );
 
           const digest = `sha256:${sha256.digest("hex")}`;
-          const finalRequest = HttpClientRequest.put(
-            `${finalState.followUploadUrl}&digest=${digest}`,
-          ).pipe(
+          const finalUrl = new URL(
+            finalState.followUploadUrl,
+            config.registryUrl,
+          );
+          finalUrl.searchParams.set("digest", digest);
+          const finalRequest = HttpClientRequest.put(finalUrl).pipe(
             HttpClientRequest.setHeaders(finalState.lastHeaders),
             HttpClientRequest.bodyUint8Array(finalState.lastChunk),
           );
@@ -152,10 +176,18 @@ export class RegistryService extends Context.Service<
           return { digest, size: finalState.bytesRead };
         }).pipe(
           Effect.mapError(
-            () =>
+            (e) =>
               new UploadError({
                 message: `Failed to upload file: ${file}`,
-                context: { fileName: file, uploadUrl, operation: "chunk" },
+                cause: e,
+                statusCode: extractStatusCode(e),
+                context: {
+                  fileName: file,
+                  uploadUrl,
+                  bytesUploaded,
+                  totalBytes,
+                  operation: "chunk",
+                },
               }),
           ),
         );
@@ -189,6 +221,7 @@ export class RegistryService extends Context.Service<
             (e) =>
               new RegistryError({
                 message: `Failed to push manifest for ${image}:${tag}`,
+                cause: e,
                 statusCode: extractStatusCode(e),
                 context: { url, image, tag, operation: "push_manifest" },
               }),
@@ -215,29 +248,24 @@ export const makeRegistryServiceLayer = (
     Layer.provide(agentLayer),
   );
 
-  const httpLayer = config.auth
-    ? Layer.effect(
-        HttpClient.HttpClient,
-        Effect.gen(function* () {
-          const baseClient = yield* HttpClient.HttpClient;
-          const token = Buffer.from(
-            `${config.auth!.username}:${config.auth!.password}`,
-          ).toString("base64");
-          return baseClient.pipe(
+  const httpLayer = Layer.effect(
+    HttpClient.HttpClient,
+    Effect.gen(function* () {
+      const baseClient = yield* HttpClient.HttpClient;
+      const { auth } = config;
+      const client = auth
+        ? baseClient.pipe(
             HttpClient.mapRequest(
-              HttpClientRequest.setHeader("Authorization", `Basic ${token}`),
+              HttpClientRequest.basicAuth(auth.username, auth.password),
             ),
-            HttpClient.filterStatusOk,
-          );
-        }),
-      ).pipe(Layer.provide(baseHttpLayer))
-    : Layer.effect(
-        HttpClient.HttpClient,
-        Effect.gen(function* () {
-          const baseClient = yield* HttpClient.HttpClient;
-          return baseClient.pipe(HttpClient.filterStatusOk);
-        }),
-      ).pipe(Layer.provide(baseHttpLayer));
+          )
+        : baseClient;
+      return client.pipe(
+        HttpClient.followRedirects(),
+        HttpClient.filterStatusOk,
+      );
+    }),
+  ).pipe(Layer.provide(baseHttpLayer));
 
   return RegistryService.layer.pipe(
     Layer.provide(Layer.mergeAll(httpLayer, NodeFileSystem.layer, configLayer)),

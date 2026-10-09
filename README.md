@@ -11,67 +11,57 @@ Supports HTTP Basic auth.
 
 ## How to use
 
-First, you have to create a configuration object with the following properties:
+The library is built on [Effect](https://effect.website) and is ESM only.
+
+Create the layer from a configuration object, then run `pushToRegistry` with that layer provided.
+
+Layer options (`makeDockerTarPusherLayer`):
 
 - registryUrl: address of the registry
 - tarball: absolute path to tar file
 - chunkSize (optional): size of chunks, defaults to 10 MiB (10 \* 1024 \* 1024)
-- logger (optional): specify custom applicationLogger, defaults to console.log
 - sslVerify (optional): should reject invalid TLS certificates, defaults to true
 - auth (optional): HTTP Basic auth containing the username and password, defaults to empty
-- image (optional): image name and version, defaults to empty
+- image (optional): image name and version, defaults to the repo tags found in the tarball
 
-Then, you can create a new instance of the `DockerTarPusher` class with the configuration object.
-After that, you can call the `pushToRegistry` method to start the upload process.
+Push options (`pushToRegistry`):
 
-### Clean-up
+- tarball: absolute path to tar file
+- image (optional): image name and version, defaults to the repo tags found in the tarball
+- onProgress (optional): callback invoked with a `ProgressEvent` for each layer, the config and the manifest
 
-After a successful upload, the library will take care about cleaning up the temporary files that have been created
-during the process.
-However, you might want to call this clean-up function on in one of your shutdown hooks in order to remove
-any leftovers in case the application exists unexpectedly.
+The temporary files created while extracting the tarball are removed when the effect finishes, even on failure or interruption.
+
+Errors are tagged and can be handled with `Effect.catchTag`: `ManifestError`, `RegistryError` and `UploadError`.
 
 ## Examples
 
 ### Quickstart
 
 ```typescript
-import { DockerTarPusher, DockerTarPusherOptions } from 'docker-tar-pusher';
+import { Effect } from 'effect';
+import { makeDockerTarPusherLayer, pushToRegistry } from 'docker-tar-pusher';
 
-const options: DockerTarPusherOptions = {
+const options = {
   registryUrl: 'http://localhost:5000',
   tarball: 'path/to/file.tar'
 };
-const dockerTarPusher = new DockerTarPusher(options);
 
-await dockerTarPusher.pushToRegistry();
+await Effect.runPromise(
+  pushToRegistry(options).pipe(Effect.provide(makeDockerTarPusherLayer(options)))
+);
 ```
 
-### Complete example with custom logger
+### Complete example
 
 ```typescript
-import { DockerTarPusher, DockerTarPusherOptions, Logger } from 'docker-tar-pusher';
+import { Effect } from 'effect';
+import { makeDockerTarPusherLayer, pushToRegistry } from 'docker-tar-pusher';
 
-const myLogger: Logger = {
-  error: (msg: string): void => {
-    console.log(`[ERROR] ${msg}`);
-  },
-  warn: (msg: string): void => {
-    console.log(`[WARN] ${msg}`);
-  },
-  info: (msg: string): void => {
-    console.log(`[INFO] ${msg}`);
-  },
-  debug: (msg: string): void => {
-    console.log(`[DEBUG] ${msg}`);
-  }
-};
-
-const options: DockerTarPusherOptions = {
+const options = {
   registryUrl: 'http://localhost:5000',
   tarball: 'path/to/file.tar',
   chunkSize: 8 * 1024 * 1024,
-  applicationLogger: myLogger,
   sslVerify: false,
   auth: {
     username: 'testuser',
@@ -80,18 +70,18 @@ const options: DockerTarPusherOptions = {
   image: {
     name: 'my-image',
     version: '1.2.3'
+  },
+  onProgress: ({ type, current, total, item }) => {
+    console.log(`[${type}] ${current}/${total} ${item}`);
   }
 };
-const dockerTarPusher = new DockerTarPusher(options);
 
-// Attaching clean-up logic to shutdown hook
-process.on('SIGINT', () => {
-  dockerTarPusher.cleanUp();
-});
+const program = pushToRegistry(options).pipe(
+  Effect.catchTag('RegistryError', (e) => Effect.logError(`${e.message} (${e.statusCode})`)),
+  Effect.provide(makeDockerTarPusherLayer(options))
+);
 
-(async () => {
-  await dockerTarPusher.pushToRegistry();
-})();
+await Effect.runPromise(program);
 ```
 
 ## License

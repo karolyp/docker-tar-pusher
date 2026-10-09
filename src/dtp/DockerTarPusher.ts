@@ -7,10 +7,10 @@ import {
   ContentTypes,
   DockerTarPusherOptionsSchema,
   ManifestSchema,
+  type ProgressCallback,
   type RegistryManifest,
 } from "../types.js";
 import {
-  type DockerRegistryServiceConfig,
   makeRegistryServiceLayer,
   RegistryService,
 } from "./DockerRegistryService.js";
@@ -19,16 +19,31 @@ export type DockerTarPusherOptions = Schema.Codec.Encoded<
   typeof DockerTarPusherOptionsSchema
 >;
 
-const decodeManifest = Schema.decodeUnknownSync(ManifestSchema);
-const decodeOptions = Schema.decodeUnknownSync(DockerTarPusherOptionsSchema);
+export type PushOptions = {
+  tarball: string;
+  image?: { name: string; version: string };
+  onProgress?: ProgressCallback;
+};
+
+const decodeManifest = Schema.decodeUnknownEffect(ManifestSchema);
+const decodeOptions = Schema.decodeUnknownEffect(DockerTarPusherOptionsSchema);
+
+const splitRepoTag = (repoTag: string): [string, string] => {
+  const separator = repoTag.lastIndexOf(":");
+  return separator > repoTag.lastIndexOf("/")
+    ? [repoTag.slice(0, separator), repoTag.slice(separator + 1)]
+    : [repoTag, "latest"];
+};
 
 const readManifest = (cwd: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const manifestPath = join(cwd, "manifest.json");
     const rawManifest = yield* fs.readFileString(manifestPath);
-    const parsedManifest = JSON.parse(rawManifest)[0];
-    return decodeManifest(parsedManifest);
+    const parsedManifest = yield* Effect.try(
+      () => (JSON.parse(rawManifest) as unknown[])[0],
+    );
+    return yield* decodeManifest(parsedManifest);
   }).pipe(
     Effect.mapError(
       () =>
@@ -42,10 +57,8 @@ const readManifest = (cwd: string) =>
     ),
   );
 
-export const pushToRegistry = (options: DockerTarPusherOptions) => {
-  const config = decodeOptions(options);
-
-  return Effect.gen(function* () {
+export const pushToRegistry = (config: PushOptions) =>
+  Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const registry = yield* RegistryService;
 
@@ -67,9 +80,9 @@ export const pushToRegistry = (options: DockerTarPusherOptions) => {
     } = yield* readManifest(tempDir);
 
     for (const repoTag of repoTags) {
-      const [image = repoTag, tag = "latest"] = config.image
+      const [image, tag] = config.image
         ? [config.image.name, config.image.version]
-        : repoTag.split(":");
+        : splitRepoTag(repoTag);
 
       const layerResults = yield* Effect.all(
         layers.map((layer, index) =>
@@ -129,18 +142,20 @@ export const pushToRegistry = (options: DockerTarPusherOptions) => {
       yield* registry.pushManifest(manifest, image, tag);
     }
   }).pipe(Effect.scoped);
-};
 
-export const makeDockerTarPusherLayer = (options: DockerTarPusherOptions) => {
-  const config = decodeOptions(options);
-  const registryConfig: DockerRegistryServiceConfig = {
-    chunkSize: config.chunkSize,
-    registryUrl: config.registryUrl,
-    sslVerify: config.sslVerify,
-    auth: config.auth,
-  };
-  return Layer.merge(
-    makeRegistryServiceLayer(registryConfig),
-    NodeFileSystem.layer,
+export const makeDockerTarPusherLayer = (options: DockerTarPusherOptions) =>
+  Layer.unwrap(
+    decodeOptions(options).pipe(
+      Effect.map((config) =>
+        Layer.merge(
+          makeRegistryServiceLayer({
+            chunkSize: config.chunkSize,
+            registryUrl: config.registryUrl,
+            sslVerify: config.sslVerify,
+            auth: config.auth,
+          }),
+          NodeFileSystem.layer,
+        ),
+      ),
+    ),
   );
-};
