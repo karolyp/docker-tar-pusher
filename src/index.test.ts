@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { makeDockerTarPusherLayer, pushToRegistry } from "./index";
+import { makeDockerTarPusherLayer, pushToRegistry } from "./index.js";
 
 const images = ["busybox", "alpine", "nginx"];
 const registryUrl = process.env.REGISTRY_URL || "http://localhost:15000";

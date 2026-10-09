@@ -1,18 +1,17 @@
 import { join } from "node:path";
-import { FileSystem } from "@effect/platform";
 import { NodeFileSystem } from "@effect/platform-node";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FileSystem, Layer, Schema } from "effect";
 import { extract } from "tar";
-import { ManifestError } from "../errors/ManifestError";
-import { DockerTarPusherOptionsSchema, ManifestSchema } from "../types";
+import { ManifestError } from "../errors/ManifestError.js";
+import { DockerTarPusherOptionsSchema, ManifestSchema } from "../types.js";
 import {
   type DockerRegistryServiceConfig,
   makeRegistryServiceLayer,
   RegistryService,
-} from "./DockerRegistryService";
-import { buildManifest } from "./ManifestBuilder";
+} from "./DockerRegistryService.js";
+import { buildManifest } from "./ManifestBuilder.js";
 
-export type DockerTarPusherOptions = Schema.Schema.Encoded<
+export type DockerTarPusherOptions = Schema.Codec.Encoded<
   typeof DockerTarPusherOptionsSchema
 >;
 

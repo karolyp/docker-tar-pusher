@@ -1,28 +1,29 @@
-import { Schema } from "effect";
+import { Effect, Schema, SchemaTransformation } from "effect";
 
-export const ManifestSchema = Schema.transform(
-  Schema.Struct({
-    Config: Schema.String,
-    RepoTags: Schema.Array(Schema.String),
-    Layers: Schema.Array(Schema.String),
-  }),
-  Schema.Struct({
-    config: Schema.String,
-    repoTags: Schema.Array(Schema.String),
-    layers: Schema.Array(Schema.String),
-  }),
-  {
-    decode: ({ Config, RepoTags, Layers }) => ({
-      config: Config,
-      repoTags: RepoTags,
-      layers: Layers,
+export const ManifestSchema = Schema.Struct({
+  Config: Schema.String,
+  RepoTags: Schema.Array(Schema.String),
+  Layers: Schema.Array(Schema.String),
+}).pipe(
+  Schema.decodeTo(
+    Schema.Struct({
+      config: Schema.String,
+      repoTags: Schema.Array(Schema.String),
+      layers: Schema.Array(Schema.String),
     }),
-    encode: ({ config, repoTags, layers }) => ({
-      Config: config,
-      RepoTags: repoTags,
-      Layers: layers,
+    SchemaTransformation.transform({
+      decode: ({ Config, RepoTags, Layers }) => ({
+        config: Config,
+        repoTags: RepoTags,
+        layers: Layers,
+      }),
+      encode: ({ config, repoTags, layers }) => ({
+        Config: config,
+        RepoTags: repoTags,
+        Layers: layers,
+      }),
     }),
-  },
+  ),
 );
 
 export const AuthSchema = Schema.Struct({
@@ -35,36 +36,19 @@ export const ImageSchema = Schema.Struct({
   version: Schema.String,
 });
 
-const DockerTarPusherOptionsInput = Schema.Struct({
+export const DockerTarPusherOptionsSchema = Schema.Struct({
   registryUrl: Schema.String,
   tarball: Schema.String,
-  chunkSize: Schema.optional(Schema.Number),
-  sslVerify: Schema.optional(Schema.Boolean),
+  chunkSize: Schema.Number.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(10 * 1024 * 1024)),
+  ),
+  sslVerify: Schema.Boolean.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(true)),
+  ),
   auth: Schema.optional(AuthSchema),
   image: Schema.optional(ImageSchema),
   onProgress: Schema.optional(Schema.Any),
 });
-
-export const DockerTarPusherOptionsSchema = Schema.transform(
-  DockerTarPusherOptionsInput,
-  Schema.Struct({
-    registryUrl: Schema.String,
-    tarball: Schema.String,
-    chunkSize: Schema.Number,
-    sslVerify: Schema.Boolean,
-    auth: Schema.optional(AuthSchema),
-    image: Schema.optional(ImageSchema),
-    onProgress: Schema.optional(Schema.Any),
-  }),
-  {
-    decode: (input) => ({
-      ...input,
-      chunkSize: input.chunkSize ?? 10 * 1024 * 1024,
-      sslVerify: input.sslVerify ?? true,
-    }),
-    encode: (output) => output,
-  },
-);
 
 export type ImageLayer = {
   size: number;

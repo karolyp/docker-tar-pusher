@@ -1,5 +1,5 @@
-import type { ChunkMetaData } from "../types";
-import { ContentTypes } from "../types";
+import type { ChunkMetaData } from "../types.js";
+import { ContentTypes } from "../types.js";
 
 export const buildManifest = (
   layerChunks: ChunkMetaData[],

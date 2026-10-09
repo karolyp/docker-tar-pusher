@@ -1,17 +1,19 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import {
-  FileSystem,
-  HttpClient,
-  type HttpClientError,
-  HttpClientRequest,
-} from "@effect/platform";
 import { NodeFileSystem, NodeHttpClient } from "@effect/platform-node";
-import { Context, Effect, Layer, Stream } from "effect";
-import { RegistryError } from "../errors/RegistryError";
-import { UploadError } from "../errors/UploadError";
-import type { Auth, ChunkMetaData, Headers, RegistryManifest } from "../types";
-import { ContentTypes, RequestHeaders } from "../types";
+import { Context, Effect, FileSystem, Layer, Stream } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import { RegistryError } from "../errors/RegistryError.js";
+import { UploadError } from "../errors/UploadError.js";
+import type {
+  Auth,
+  ChunkMetaData,
+  Headers,
+  RegistryManifest,
+} from "../types.js";
+import { ContentTypes, RequestHeaders } from "../types.js";
 
 export type DockerRegistryServiceConfig = {
   chunkSize: number;
@@ -20,9 +22,34 @@ export type DockerRegistryServiceConfig = {
   auth?: Auth;
 };
 
-// --- Effect Service tag ---
+class RegistryConfig extends Context.Service<
+  RegistryConfig,
+  DockerRegistryServiceConfig
+>()("RegistryConfig") {}
 
-export class RegistryService extends Context.Tag("DockerRegistryService")<
+// --- Helpers ---
+
+const getChunkUploadHeaders = (start: number, length: number): Headers => ({
+  [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
+  [RequestHeaders.CONTENT_LENGTH]: String(length),
+  [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`,
+});
+
+const extractStatusCode = (
+  e: HttpClientError.HttpClientError,
+): number | undefined =>
+  e.reason._tag === "StatusCodeError" ? e.reason.response.status : undefined;
+
+type ChunkState = {
+  bytesRead: number;
+  followUploadUrl: string;
+  lastChunk: Uint8Array;
+  lastHeaders: Headers;
+};
+
+// --- Service ---
+
+export class RegistryService extends Context.Service<
   RegistryService,
   {
     readonly upload: (
@@ -36,71 +63,11 @@ export class RegistryService extends Context.Tag("DockerRegistryService")<
       tag: string,
     ) => Effect.Effect<void, RegistryError>;
   }
->() {}
-
-// --- Helpers ---
-
-const getChunkUploadHeaders = (start: number, length: number): Headers => ({
-  [RequestHeaders.CONTENT_TYPE]: ContentTypes.APPLICATION_OCTET_STREAM,
-  [RequestHeaders.CONTENT_LENGTH]: String(length),
-  [RequestHeaders.CONTENT_RANGE]: `${start}-${start + length}`,
-});
-
-const extractStatusCode = (
-  e: HttpClientError.HttpClientError,
-): number | undefined =>
-  e._tag === "ResponseError" ? e.response.status : undefined;
-
-// --- Chunk upload state ---
-
-type ChunkState = {
-  bytesRead: number;
-  followUploadUrl: string;
-  lastChunk: Uint8Array;
-  lastHeaders: Headers;
-};
-
-// --- Layer factory ---
-
-export const makeRegistryServiceLayer = (
-  config: DockerRegistryServiceConfig,
-): Layer.Layer<RegistryService> => {
-  const agentLayer = NodeHttpClient.makeAgentLayer({
-    rejectUnauthorized: config.sslVerify,
-    requestCert: true,
-  });
-
-  const baseHttpLayer = NodeHttpClient.layerWithoutAgent.pipe(
-    Layer.provide(agentLayer),
-  );
-
-  const httpLayer = config.auth
-    ? Layer.effect(
-        HttpClient.HttpClient,
-        Effect.gen(function* () {
-          const baseClient = yield* HttpClient.HttpClient;
-          const token = Buffer.from(
-            `${config.auth!.username}:${config.auth!.password}`,
-          ).toString("base64");
-          return baseClient.pipe(
-            HttpClient.mapRequest(
-              HttpClientRequest.setHeader("Authorization", `Basic ${token}`),
-            ),
-            HttpClient.filterStatusOk,
-          );
-        }),
-      ).pipe(Layer.provide(baseHttpLayer))
-    : Layer.effect(
-        HttpClient.HttpClient,
-        Effect.gen(function* () {
-          const baseClient = yield* HttpClient.HttpClient;
-          return baseClient.pipe(HttpClient.filterStatusOk);
-        }),
-      ).pipe(Layer.provide(baseHttpLayer));
-
-  const serviceLayer = Layer.effect(
+>()("DockerRegistryService") {
+  static readonly layer = Layer.effect(
     RegistryService,
     Effect.gen(function* () {
+      const config = yield* RegistryConfig;
       const client = yield* HttpClient.HttpClient;
       const fs = yield* FileSystem.FileSystem;
 
@@ -136,12 +103,13 @@ export const makeRegistryServiceLayer = (
 
           const finalState = yield* fileStream.pipe(
             Stream.runFoldEffect(
-              {
-                bytesRead: 0,
-                followUploadUrl: uploadUrl,
-                lastChunk: new Uint8Array(0),
-                lastHeaders: {} as Headers,
-              } satisfies ChunkState,
+              () =>
+                ({
+                  bytesRead: 0,
+                  followUploadUrl: uploadUrl,
+                  lastChunk: new Uint8Array(0),
+                  lastHeaders: {} as Headers,
+                }) satisfies ChunkState,
               (state, chunk) =>
                 Effect.gen(function* () {
                   const headers = getChunkUploadHeaders(
@@ -216,11 +184,10 @@ export const makeRegistryServiceLayer = (
       ): Effect.Effect<void, RegistryError> => {
         const url = `${config.registryUrl}/v2/${image}/manifests/${tag}`;
         const request = HttpClientRequest.put(url).pipe(
-          HttpClientRequest.setHeader(
-            "Content-Type",
+          HttpClientRequest.bodyText(
+            JSON.stringify(manifest),
             ContentTypes.APPLICATION_MANIFEST,
           ),
-          HttpClientRequest.bodyUnsafeJson(manifest),
         );
         return client.execute(request).pipe(
           Effect.asVoid,
@@ -235,9 +202,52 @@ export const makeRegistryServiceLayer = (
         );
       };
 
-      return { upload, pushManifest };
+      return RegistryService.of({ upload, pushManifest });
     }),
-  ).pipe(Layer.provide(Layer.merge(httpLayer, NodeFileSystem.layer)));
+  );
+}
 
-  return serviceLayer;
+// --- Layer factory ---
+
+export const makeRegistryServiceLayer = (
+  config: DockerRegistryServiceConfig,
+): Layer.Layer<RegistryService> => {
+  const configLayer = Layer.succeed(RegistryConfig, config);
+
+  const agentLayer = NodeHttpClient.layerAgentOptions({
+    rejectUnauthorized: config.sslVerify,
+    requestCert: true,
+  });
+
+  const baseHttpLayer = NodeHttpClient.layerNodeHttpNoAgent.pipe(
+    Layer.provide(agentLayer),
+  );
+
+  const httpLayer = config.auth
+    ? Layer.effect(
+        HttpClient.HttpClient,
+        Effect.gen(function* () {
+          const baseClient = yield* HttpClient.HttpClient;
+          const token = Buffer.from(
+            `${config.auth!.username}:${config.auth!.password}`,
+          ).toString("base64");
+          return baseClient.pipe(
+            HttpClient.mapRequest(
+              HttpClientRequest.setHeader("Authorization", `Basic ${token}`),
+            ),
+            HttpClient.filterStatusOk,
+          );
+        }),
+      ).pipe(Layer.provide(baseHttpLayer))
+    : Layer.effect(
+        HttpClient.HttpClient,
+        Effect.gen(function* () {
+          const baseClient = yield* HttpClient.HttpClient;
+          return baseClient.pipe(HttpClient.filterStatusOk);
+        }),
+      ).pipe(Layer.provide(baseHttpLayer));
+
+  return RegistryService.layer.pipe(
+    Layer.provide(Layer.mergeAll(httpLayer, NodeFileSystem.layer, configLayer)),
+  );
 };

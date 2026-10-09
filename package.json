@@ -6,7 +6,14 @@
     "type": "git",
     "url": "https://github.com/karolyp/docker-tar-pusher.git"
   },
+  "type": "module",
   "main": "build/index.js",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    }
+  },
   "types": "build/index.d.ts",
   "files": [
     "build"
@@ -44,9 +51,8 @@
     "vitest": "^2.1.4"
   },
   "dependencies": {
-    "@effect/platform": "^0.94.5",
-    "@effect/platform-node": "^0.104.1",
-    "effect": "^3.19.18",
+    "@effect/platform-node": "^4.0.2",
+    "effect": "^4.0.2",
     "tar": "^6.1.11"
   },
   "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264"

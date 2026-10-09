@@ -2,16 +2,16 @@ export {
   type DockerRegistryServiceConfig,
   makeRegistryServiceLayer,
   RegistryService,
-} from "./dtp/DockerRegistryService";
+} from "./dtp/DockerRegistryService.js";
 export {
   type DockerTarPusherOptions,
   makeDockerTarPusherLayer,
   pushToRegistry,
-} from "./dtp/DockerTarPusher";
-export { buildManifest } from "./dtp/ManifestBuilder";
-export { ManifestError } from "./errors/ManifestError";
-export { RegistryError } from "./errors/RegistryError";
-export { UploadError } from "./errors/UploadError";
+} from "./dtp/DockerTarPusher.js";
+export { buildManifest } from "./dtp/ManifestBuilder.js";
+export { ManifestError } from "./errors/ManifestError.js";
+export { RegistryError } from "./errors/RegistryError.js";
+export { UploadError } from "./errors/UploadError.js";
 export type {
   ApplicationConfiguration,
   Auth,
@@ -19,4 +19,4 @@ export type {
   Config,
   ImageLayer,
   RegistryManifest,
-} from "./types";
+} from "./types.js";
