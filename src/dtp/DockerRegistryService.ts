@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
-import { NodeFileSystem, NodeHttpClient } from "@effect/platform-node";
-import { Context, Effect, FileSystem, Layer, Stream } from "effect";
+import {
+  NodeFileSystem,
+  NodeHttpClient,
+  NodePath,
+} from "@effect/platform-node";
+import { Context, Effect, FileSystem, Layer, Path, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -76,6 +79,7 @@ export class RegistryService extends Context.Service<
       const config = yield* RegistryConfig;
       const client = yield* HttpClient.HttpClient;
       const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
 
       const initiateUpload = (
         image: string,
@@ -100,7 +104,7 @@ export class RegistryService extends Context.Service<
         uploadUrl: string,
         file: string,
       ): Effect.Effect<ChunkMetaData, UploadError> => {
-        const filePath = join(cwd, file);
+        const filePath = path.join(cwd, file);
         let bytesUploaded = 0;
         let totalBytes: number | undefined;
         return Effect.gen(function* () {
@@ -259,6 +263,13 @@ export const makeRegistryServiceLayer = (
   ).pipe(Layer.provide(baseHttpLayer));
 
   return RegistryService.layer.pipe(
-    Layer.provide(Layer.mergeAll(httpLayer, NodeFileSystem.layer, configLayer)),
+    Layer.provide(
+      Layer.mergeAll(
+        httpLayer,
+        NodeFileSystem.layer,
+        NodePath.layer,
+        configLayer,
+      ),
+    ),
   );
 };
