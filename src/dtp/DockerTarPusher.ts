@@ -1,6 +1,5 @@
-import { isAbsolute, join, relative, sep } from "node:path";
-import { NodeFileSystem } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, Schema } from "effect";
+import { NodeFileSystem, NodePath } from "@effect/platform-node";
+import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { extract } from "tar";
 import { ManifestError } from "../errors/ManifestError.js";
 import {
@@ -44,35 +43,41 @@ const splitRepoTag = (repoTag: string): [string, string] => {
 const readManifest = (cwd: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const manifestPath = join(cwd, "manifest.json");
-    const rawManifest = yield* fs.readFileString(manifestPath);
-    const parsedManifest = yield* Effect.try(
-      () => (JSON.parse(rawManifest) as unknown[])[0],
-    );
-    const manifest = yield* decodeManifest(parsedManifest);
-    const root = yield* fs.realPath(cwd);
-    for (const file of [manifest.config, ...manifest.layers]) {
-      const path = relative(root, yield* fs.realPath(join(cwd, file)));
-      if (path.split(sep)[0] === ".." || isAbsolute(path)) {
-        return yield* Effect.fail(
-          new Error(`Manifest entry points outside the tarball: ${file}`),
+    const path = yield* Path.Path;
+    const manifestPath = path.join(cwd, "manifest.json");
+    return yield* Effect.gen(function* () {
+      const rawManifest = yield* fs.readFileString(manifestPath);
+      const parsedManifest = yield* Effect.try(
+        () => (JSON.parse(rawManifest) as unknown[])[0],
+      );
+      const manifest = yield* decodeManifest(parsedManifest);
+      const root = yield* fs.realPath(cwd);
+      for (const file of [manifest.config, ...manifest.layers]) {
+        const relativePath = path.relative(
+          root,
+          yield* fs.realPath(path.join(cwd, file)),
         );
+        if (
+          relativePath.split(path.sep)[0] === ".." ||
+          path.isAbsolute(relativePath)
+        ) {
+          return yield* Effect.fail(
+            new Error(`Manifest entry points outside the tarball: ${file}`),
+          );
+        }
       }
-    }
-    return manifest;
-  }).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ManifestError({
-          message: `Failed to read manifest from ${cwd}`,
-          cause,
-          context: {
-            manifestPath: join(cwd, "manifest.json"),
-            operation: "parse",
-          },
-        }),
-    ),
-  );
+      return manifest;
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ManifestError({
+            message: `Failed to read manifest from ${cwd}`,
+            cause,
+            context: { manifestPath, operation: "parse" },
+          }),
+      ),
+    );
+  });
 
 export const pushToRegistry = (options: PushOptions) =>
   Effect.gen(function* () {
@@ -185,7 +190,7 @@ export const makeDockerTarPusherLayer = (options: DockerTarPusherOptions) =>
             sslVerify: config.sslVerify,
             auth: config.auth,
           }),
-          NodeFileSystem.layer,
+          Layer.merge(NodeFileSystem.layer, NodePath.layer),
         ),
       ),
     ),
