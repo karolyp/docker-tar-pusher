@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { NodeFileSystem } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Schema } from "effect";
 import { extract } from "tar";
@@ -49,7 +49,17 @@ const readManifest = (cwd: string) =>
     const parsedManifest = yield* Effect.try(
       () => (JSON.parse(rawManifest) as unknown[])[0],
     );
-    return yield* decodeManifest(parsedManifest);
+    const manifest = yield* decodeManifest(parsedManifest);
+    const root = yield* fs.realPath(cwd);
+    for (const file of [manifest.config, ...manifest.layers]) {
+      const path = relative(root, yield* fs.realPath(join(cwd, file)));
+      if (path.split(sep)[0] === ".." || isAbsolute(path)) {
+        return yield* Effect.fail(
+          new Error(`Manifest entry points outside the tarball: ${file}`),
+        );
+      }
+    }
+    return manifest;
   }).pipe(
     Effect.mapError(
       (cause) =>

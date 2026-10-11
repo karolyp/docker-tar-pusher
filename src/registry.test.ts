@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -63,14 +63,21 @@ afterEach(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const buildTarball = async (repoTags = ["localhost:5000/app:1.0"]) => {
+const buildTarball = async (
+  repoTags = ["localhost:5000/app:1.0"],
+  layers = ["layer.tar"],
+  symlinks: Record<string, string> = {},
+) => {
   const dir = mkdtempSync(join(tmpdir(), "dtp-registry-test-"));
   writeFileSync(join(dir, "config.json"), "0123456789");
   writeFileSync(join(dir, "layer.tar"), "abcdefghij");
+  for (const [name, target] of Object.entries(symlinks)) {
+    symlinkSync(target, join(dir, name));
+  }
   writeFileSync(
     join(dir, "manifest.json"),
     JSON.stringify([
-      { Config: "config.json", RepoTags: repoTags, Layers: ["layer.tar"] },
+      { Config: "config.json", RepoTags: repoTags, Layers: layers },
     ]),
   );
   const file = join(dir, "image.tar");
@@ -78,6 +85,7 @@ const buildTarball = async (repoTags = ["localhost:5000/app:1.0"]) => {
     "manifest.json",
     "config.json",
     "layer.tar",
+    ...Object.keys(symlinks),
   ]);
   return file;
 };
@@ -305,6 +313,25 @@ describe("failures", () => {
       _tag: "ManifestError",
       context: { operation: "validate" },
     });
+    expect(requests).toHaveLength(0);
+  });
+
+  test("manifest entries outside the tarball are not uploaded", async () => {
+    const secret = join(mkdtempSync(join(tmpdir(), "dtp-secret-")), "secret");
+    writeFileSync(secret, "secret");
+    const tarballs = [
+      await buildTarball(undefined, ["../".repeat(30) + secret.slice(1)]),
+      await buildTarball(undefined, ["link.tar"], { "link.tar": secret }),
+    ];
+
+    for (const tarball of tarballs) {
+      const error = await fail(tarball);
+
+      expect(error).toMatchObject({ _tag: "ManifestError" });
+      expect(String((error as { cause: unknown }).cause)).toContain(
+        "outside the tarball",
+      );
+    }
     expect(requests).toHaveLength(0);
   });
 
