@@ -316,7 +316,7 @@ describe("failures", () => {
     expect(requests).toHaveLength(0);
   });
 
-  test("manifest entries outside the tarball are not uploaded", async () => {
+  test("files outside the tarball are not uploaded", async () => {
     const secret = join(mkdtempSync(join(tmpdir(), "dtp-secret-")), "secret");
     writeFileSync(secret, "secret");
     const tarballs = [
@@ -327,9 +327,9 @@ describe("failures", () => {
     for (const tarball of tarballs) {
       const error = await fail(tarball);
 
-      expect(error).toMatchObject({ _tag: "ManifestError" });
+      expect(error).toMatchObject({ _tag: "UploadError" });
       expect(String((error as { cause: unknown }).cause)).toContain(
-        "outside the tarball",
+        "resolves outside",
       );
     }
     expect(requests).toHaveLength(0);

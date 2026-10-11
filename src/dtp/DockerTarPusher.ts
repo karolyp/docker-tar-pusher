@@ -50,23 +50,7 @@ const readManifest = (cwd: string) =>
       const parsedManifest = yield* Effect.try(
         () => (JSON.parse(rawManifest) as unknown[])[0],
       );
-      const manifest = yield* decodeManifest(parsedManifest);
-      const root = yield* fs.realPath(cwd);
-      for (const file of [manifest.config, ...manifest.layers]) {
-        const relativePath = path.relative(
-          root,
-          yield* fs.realPath(path.join(cwd, file)),
-        );
-        if (
-          relativePath.split(path.sep)[0] === ".." ||
-          path.isAbsolute(relativePath)
-        ) {
-          return yield* Effect.fail(
-            new Error(`Manifest entry points outside the tarball: ${file}`),
-          );
-        }
-      }
-      return manifest;
+      return yield* decodeManifest(parsedManifest);
     }).pipe(
       Effect.mapError(
         (cause) =>

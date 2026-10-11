@@ -99,12 +99,39 @@ export class RegistryService extends Context.Service<
         );
       };
 
-      const pushFileInChunks = (
+      const resolveInside = (
         cwd: string,
+        file: string,
+      ): Effect.Effect<string, UploadError> =>
+        Effect.gen(function* () {
+          const root = yield* fs.realPath(cwd);
+          const filePath = yield* fs.realPath(path.join(cwd, file));
+          const relativePath = path.relative(root, filePath);
+          if (
+            relativePath.split(path.sep)[0] === ".." ||
+            path.isAbsolute(relativePath)
+          ) {
+            return yield* Effect.fail(
+              new Error(`File resolves outside ${cwd}: ${file}`),
+            );
+          }
+          return filePath;
+        }).pipe(
+          Effect.mapError(
+            (e) =>
+              new UploadError({
+                message: `Failed to upload file: ${file}`,
+                cause: e,
+                context: { fileName: file },
+              }),
+          ),
+        );
+
+      const pushFileInChunks = (
+        filePath: string,
         uploadUrl: string,
         file: string,
       ): Effect.Effect<ChunkMetaData, UploadError> => {
-        const filePath = path.join(cwd, file);
         let bytesUploaded = 0;
         let totalBytes: number | undefined;
         return Effect.gen(function* () {
@@ -194,8 +221,9 @@ export class RegistryService extends Context.Service<
         file: string,
       ): Effect.Effect<ChunkMetaData, RegistryError | UploadError> =>
         Effect.gen(function* () {
+          const filePath = yield* resolveInside(cwd, file);
           const uploadUrl = yield* initiateUpload(image);
-          return yield* pushFileInChunks(cwd, uploadUrl, file);
+          return yield* pushFileInChunks(filePath, uploadUrl, file);
         });
 
       const pushManifest = (
