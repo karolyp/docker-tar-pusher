@@ -1,15 +1,8 @@
-export default class RegistryError extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode?: number,
-    public readonly context?: {
-      url?: string;
-      image?: string;
-      tag?: string;
-      operation?: string;
-    },
-  ) {
-    super(message);
-    this.name = "RegistryError";
-  }
-}
+import { Data } from "effect";
+
+export class RegistryError extends Data.TaggedError("RegistryError")<{
+  message: string;
+  cause?: unknown;
+  statusCode?: number;
+  context?: { url?: string; image?: string; tag?: string; operation?: string };
+}> {}
