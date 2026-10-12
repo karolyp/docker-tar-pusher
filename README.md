@@ -30,9 +30,9 @@ Push options (`pushToRegistry`):
 
 Blobs are uploaded once per image name and the manifest is pushed for each tag.
 
-The temporary files created while extracting the tarball are removed when the effect finishes, even on failure or interruption.
+The temporary files created while extracting the tarball are removed when the effect finishes, even on failure or interruption. To remove them on Ctrl-C or `SIGTERM`, run the program with `NodeRuntime.runMain` from `@effect/platform-node`, which interrupts the effect on those signals. `Effect.runPromise` does not, so the process exits without removing them.
 
-Errors are tagged and can be handled with `Effect.catchTag`: `ManifestError`, `RegistryError` and `UploadError`.
+Errors are tagged and can be handled with `Effect.catchTag`: `ManifestError`, `RegistryError` and `UploadError`. Invalid options fail with `SchemaError`, and file system failures outside the tarball (such as an unwritable temp directory) fail with `PlatformError`.
 
 ## Examples
 
@@ -55,8 +55,14 @@ await Effect.runPromise(
 ### Complete example
 
 ```typescript
+import { NodeRuntime } from '@effect/platform-node';
 import { Effect } from 'effect';
-import { makeDockerTarPusherLayer, pushToRegistry } from 'docker-tar-pusher';
+import {
+  type DockerTarPusherOptions,
+  makeDockerTarPusherLayer,
+  type PushOptions,
+  pushToRegistry
+} from 'docker-tar-pusher';
 
 const options = {
   registryUrl: 'http://localhost:5000',
@@ -74,14 +80,14 @@ const options = {
   onProgress: ({ type, current, total, item }) => {
     console.log(`[${type}] ${current}/${total} ${item}`);
   }
-};
+} satisfies DockerTarPusherOptions & PushOptions;
 
 const program = pushToRegistry(options).pipe(
   Effect.catchTag('RegistryError', (e) => Effect.logError(`${e.message} (${e.statusCode})`)),
   Effect.provide(makeDockerTarPusherLayer(options))
 );
 
-await Effect.runPromise(program);
+NodeRuntime.runMain(program);
 ```
 
 ## License

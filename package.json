@@ -7,6 +7,9 @@
     "url": "https://github.com/karolyp/docker-tar-pusher.git"
   },
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "main": "build/index.js",
   "exports": {
     ".": {
