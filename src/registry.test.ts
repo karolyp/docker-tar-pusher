@@ -26,10 +26,9 @@ let registryUrl: string;
 let requests: Recorded[];
 let override: Handler;
 
-const defaultReply = ({ method, url }: Recorded): Reply => {
+const defaultReply = ({ method }: Recorded): Reply => {
   if (method === "POST") return { status: 202, location: "/upload/1" };
   if (method === "PATCH") return { status: 202, location: "/upload/1?next=1" };
-  if (url.pathname.includes("/manifests/")) return { status: 201 };
   return { status: 201 };
 };
 
@@ -92,22 +91,18 @@ const buildTarball = async (
 
 type Options = Partial<Parameters<typeof makeDockerTarPusherLayer>[0]>;
 
-const push = async (tarball: string, options: Options = {}) => {
+const program = (tarball: string, options: Options = {}) => {
   const all = { tarball, registryUrl, chunkSize: 4, ...options };
-  return Effect.runPromise(
-    pushToRegistry(all).pipe(Effect.provide(makeDockerTarPusherLayer(all))),
+  return pushToRegistry(all).pipe(
+    Effect.provide(makeDockerTarPusherLayer(all)),
   );
 };
 
-const fail = async (tarball: string, options: Options = {}) => {
-  const all = { tarball, registryUrl, chunkSize: 4, ...options };
-  return Effect.runPromise(
-    pushToRegistry(all).pipe(
-      Effect.flip,
-      Effect.provide(makeDockerTarPusherLayer(all)),
-    ),
-  );
-};
+const push = (tarball: string, options?: Options) =>
+  Effect.runPromise(program(tarball, options));
+
+const fail = (tarball: string, options?: Options) =>
+  Effect.runPromise(Effect.flip(program(tarball, options)));
 
 describe("successful push", () => {
   test("uploads chunks, finalizes with an encoded digest and pushes the manifest", async () => {
@@ -208,6 +203,26 @@ describe("successful push", () => {
     }
   });
 
+  test("does not send auth to an upload location on another origin", async () => {
+    const otherOrigin = registryUrl.replace("localhost", "127.0.0.1");
+    override = ({ method }) =>
+      method === "POST"
+        ? { status: 202, location: `${otherOrigin}/upload/1` }
+        : undefined;
+
+    await push(await buildTarball(), {
+      auth: { username: "u", password: "p" },
+    });
+
+    const uploads = requests.filter((r) => r.url.pathname === "/upload/1");
+    const registry = requests.filter((r) => r.url.pathname.startsWith("/v2/"));
+    expect(uploads.length).toBeGreaterThan(0);
+    expect(uploads.every((r) => r.headers.authorization === undefined)).toBe(
+      true,
+    );
+    expect(registry.every((r) => r.headers.authorization)).toBe(true);
+  });
+
   test("does not send auth by default", async () => {
     await push(await buildTarball());
 
@@ -293,6 +308,21 @@ describe("failures", () => {
     expect((error as { cause: unknown }).cause).toBeDefined();
   });
 
+  test("final PUT failure reports the finalize operation", async () => {
+    override = ({ method, url }) =>
+      method === "PUT" && url.searchParams.has("digest")
+        ? { status: 400 }
+        : undefined;
+
+    const error = await fail(await buildTarball());
+
+    expect(error).toMatchObject({
+      _tag: "UploadError",
+      statusCode: 400,
+      context: { operation: "finalize", totalBytes: 10 },
+    });
+  });
+
   test("manifest push failure keeps the status code", async () => {
     override = ({ url }) =>
       url.pathname.includes("/manifests/") ? { status: 400 } : undefined;
@@ -335,15 +365,10 @@ describe("failures", () => {
     expect(requests).toHaveLength(0);
   });
 
-  test("ManifestError keeps the cause", async () => {
-    const error = await fail(join(tmpdir(), "does-not-exist.tar"));
-
-    expect((error as { cause: unknown }).cause).toBeDefined();
-  });
-
-  test("a missing tarball fails with ManifestError", async () => {
+  test("a missing tarball fails with ManifestError and keeps the cause", async () => {
     const error = await fail(join(tmpdir(), "does-not-exist.tar"));
 
     expect(error).toMatchObject({ _tag: "ManifestError" });
+    expect((error as { cause: unknown }).cause).toBeDefined();
   });
 });

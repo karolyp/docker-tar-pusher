@@ -55,7 +55,6 @@ type ChunkState = {
   bytesRead: number;
   followUploadUrl: string;
   lastChunk: Uint8Array;
-  lastHeaders: Headers;
 };
 
 export class RegistryService extends Context.Service<
@@ -134,6 +133,7 @@ export class RegistryService extends Context.Service<
       ): Effect.Effect<ChunkMetaData, UploadError> => {
         let bytesUploaded = 0;
         let totalBytes: number | undefined;
+        let operation: "chunk" | "finalize" = "chunk";
         return Effect.gen(function* () {
           const sha256 = createHash("sha256");
           const fileSize = Number((yield* fs.stat(filePath)).size);
@@ -148,14 +148,9 @@ export class RegistryService extends Context.Service<
                 bytesRead: 0,
                 followUploadUrl: uploadUrl,
                 lastChunk: new Uint8Array(0),
-                lastHeaders: {} as Headers,
               }),
               (state, chunk) =>
                 Effect.gen(function* () {
-                  const headers = getChunkUploadHeaders(
-                    state.bytesRead,
-                    chunk.length,
-                  );
                   const bytesRead = state.bytesRead + chunk.length;
                   sha256.update(chunk);
 
@@ -163,7 +158,9 @@ export class RegistryService extends Context.Service<
                     const request = HttpClientRequest.patch(
                       state.followUploadUrl,
                     ).pipe(
-                      HttpClientRequest.setHeaders(headers),
+                      HttpClientRequest.setHeaders(
+                        getChunkUploadHeaders(state.bytesRead, chunk.length),
+                      ),
                       HttpClientRequest.bodyUint8Array(chunk),
                     );
                     const response = yield* client.execute(request);
@@ -172,27 +169,30 @@ export class RegistryService extends Context.Service<
                       bytesRead,
                       followUploadUrl: yield* locationOf(response),
                       lastChunk: chunk,
-                      lastHeaders: headers,
                     };
                   }
 
-                  return {
-                    bytesRead,
-                    followUploadUrl: state.followUploadUrl,
-                    lastChunk: chunk,
-                    lastHeaders: headers,
-                  };
+                  return { ...state, bytesRead, lastChunk: chunk };
                 }),
             ),
           );
 
+          const { bytesRead, followUploadUrl, lastChunk } = finalState;
           const digest = `sha256:${sha256.digest("hex")}`;
-          const finalUrl = new URL(finalState.followUploadUrl);
+          const finalUrl = new URL(followUploadUrl);
           finalUrl.searchParams.set("digest", digest);
           const finalRequest = HttpClientRequest.put(finalUrl).pipe(
-            HttpClientRequest.setHeaders(finalState.lastHeaders),
-            HttpClientRequest.bodyUint8Array(finalState.lastChunk),
+            HttpClientRequest.setHeaders(
+              lastChunk.length > 0
+                ? getChunkUploadHeaders(
+                    bytesRead - lastChunk.length,
+                    lastChunk.length,
+                  )
+                : {},
+            ),
+            HttpClientRequest.bodyUint8Array(lastChunk),
           );
+          operation = "finalize";
           yield* client.execute(finalRequest);
 
           return { digest, size: finalState.bytesRead };
@@ -208,7 +208,7 @@ export class RegistryService extends Context.Service<
                   uploadUrl,
                   bytesUploaded,
                   totalBytes,
-                  operation: "chunk",
+                  operation,
                 },
               }),
           ),
@@ -259,8 +259,9 @@ export class RegistryService extends Context.Service<
 
 export const makeRegistryServiceLayer = (
   config: DockerRegistryServiceConfig,
-): Layer.Layer<RegistryService> => {
+): Layer.Layer<RegistryService | FileSystem.FileSystem | Path.Path> => {
   const configLayer = Layer.succeed(RegistryConfig, config);
+  const registryOrigin = new URL(config.registryUrl).origin;
 
   const agentLayer = NodeHttpClient.layerAgentOptions({
     rejectUnauthorized: config.sslVerify,
@@ -278,8 +279,14 @@ export const makeRegistryServiceLayer = (
       const { auth } = config;
       const client = auth
         ? baseClient.pipe(
-            HttpClient.mapRequest(
-              HttpClientRequest.basicAuth(auth.username, auth.password),
+            HttpClient.mapRequest((request) =>
+              new URL(request.url).origin === registryOrigin
+                ? HttpClientRequest.basicAuth(
+                    request,
+                    auth.username,
+                    auth.password,
+                  )
+                : request,
             ),
           )
         : baseClient;
@@ -291,13 +298,7 @@ export const makeRegistryServiceLayer = (
   ).pipe(Layer.provide(baseHttpLayer));
 
   return RegistryService.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        httpLayer,
-        NodeFileSystem.layer,
-        NodePath.layer,
-        configLayer,
-      ),
-    ),
+    Layer.provide(Layer.merge(httpLayer, configLayer)),
+    Layer.provideMerge(Layer.merge(NodeFileSystem.layer, NodePath.layer)),
   );
 };

@@ -1,4 +1,3 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { extract } from "tar";
 import { ManifestError } from "../errors/ManifestError.js";
@@ -165,17 +164,5 @@ export const pushToRegistry = (options: PushOptions) =>
 
 export const makeDockerTarPusherLayer = (options: DockerTarPusherOptions) =>
   Layer.unwrap(
-    decodeOptions(options).pipe(
-      Effect.map((config) =>
-        Layer.merge(
-          makeRegistryServiceLayer({
-            chunkSize: config.chunkSize,
-            registryUrl: config.registryUrl,
-            sslVerify: config.sslVerify,
-            auth: config.auth,
-          }),
-          Layer.merge(NodeFileSystem.layer, NodePath.layer),
-        ),
-      ),
-    ),
+    decodeOptions(options).pipe(Effect.map(makeRegistryServiceLayer)),
   );
